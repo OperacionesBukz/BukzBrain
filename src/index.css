@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Internal Employee Portal Design System */
+
+@layer base {
+  :root {
+    /* Core Colors */
+    --background: 0 0% 100%;
+    --foreground: 84 8% 9%;
+
+    /* Card surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 84 8% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 84 8% 9%;
+
+    /* Primary - Yellow brand */
+    --primary: 53 94% 65%;
+    --primary-foreground: 84 8% 9%;
+
+    /* Secondary - Light gray */
+    --secondary: 60 5% 96%;
+    --secondary-foreground: 84 8% 9%;
+
+    /* Muted surfaces */
+    --muted: 60 5% 96%;
+    --muted-foreground: 84 8% 40%;
+
+    /* Accent */
+    --accent: 53 94% 65%;
+    --accent-foreground: 84 8% 9%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders & inputs */
+    --border: 60 5% 90%;
+    --input: 60 5% 90%;
+    --ring: 53 94% 65%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar - Yellow background */
+    --sidebar-background: 53 94% 65%;
+    --sidebar-foreground: 84 8% 9%;
+    --sidebar-primary: 84 8% 9%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 100%;
+    --sidebar-accent-foreground: 84 8% 9%;
+    --sidebar-border: 53 80% 55%;
+    --sidebar-ring: 84 8% 9%;
+
+    /* Custom tokens */
+    --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+    --card-shadow-hover: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+  }
+
+  .dark {
+    --background: 84 8% 9%;
+    --foreground: 0 0% 98%;
+
+    --card: 84 8% 12%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 84 8% 12%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 53 94% 65%;
+    --primary-foreground: 84 8% 9%;
+
+    --secondary: 84 8% 16%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 84 8% 16%;
+    --muted-foreground: 60 5% 65%;
+
+    --accent: 53 94% 65%;
+    --accent-foreground: 84 8% 9%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 84 8% 18%;
+    --input: 84 8% 18%;
+    --ring: 53 94% 65%;
+
+    --sidebar-background: 84 8% 6%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 53 94% 65%;
+    --sidebar-primary-foreground: 84 8% 9%;
+    --sidebar-accent: 84 8% 14%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 84 8% 18%;
+    --sidebar-ring: 53 94% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .card-hover-shadow {
+    box-shadow: var(--card-shadow);
+    transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+  }
+  
+  .card-hover-shadow:hover {
+    box-shadow: var(--card-shadow-hover);
+    transform: translateY(-2px);
+  }
+}
