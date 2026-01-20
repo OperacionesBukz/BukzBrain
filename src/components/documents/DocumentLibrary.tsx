@@ -17,7 +17,7 @@ const libreriasDocuments: DocumentData[] = [
     title: "Vacaciones y permisos",
     instructions: "Formatos requeridos para solicitud de novedades.",
     buttons: [
-      { label: "Descargar Formato Vacaciones", href: "/documents/FORMATO_SOLICITUD_VACACIONES.pdf" },
+      { label: "Descargar Formato Vacaciones", href: "./documents/FORMATO_SOLICITUD_VACACIONES.pdf" },
       { label: "Descargar Formato Permiso", href: "/documents/FORMATO_SOLICITUD_DE_PERMISO.xlsx" },
     ],
     emails: [
