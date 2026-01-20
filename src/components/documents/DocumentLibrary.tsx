@@ -1,9 +1,15 @@
 import { DocumentCard } from "./DocumentCard";
 
+interface EmailData {
+  label: string;
+  email: string;
+}
+
 interface DocumentData {
   title: string;
   instructions: string;
   buttons: { label: string; href: string }[];
+  emails?: EmailData[];
 }
 
 const libreriasDocuments: DocumentData[] = [
@@ -13,6 +19,10 @@ const libreriasDocuments: DocumentData[] = [
     buttons: [
       { label: "Descargar Formato Vacaciones", href: "/documents/FORMATO_SOLICITUD_VACACIONES.pdf" },
       { label: "Descargar Formato Permiso", href: "/documents/FORMATO_SOLICITUD_DE_PERMISO.xlsx" },
+    ],
+    emails: [
+      { label: "Operaciones", email: "operaciones@bukz.co" },
+      { label: "Recursos Humanos", email: "rh@bukz.co" },
     ],
   },
   {
@@ -26,7 +36,7 @@ const operacionesDocuments: DocumentData[] = [
   {
     title: "Creación de productos",
     instructions: "Paso a paso para ingresar nuevas referencias al sistema.",
-    buttons: [{ label: "Descargar Plantilla Creación", href: "/documents/Creacion_productos.xlsx" }],
+    buttons: [{ label: "Descargar Guía Creación", href: "/documents/Creacion_productos.xlsx" }],
   },
   {
     title: "Actualización de productos",
@@ -61,6 +71,7 @@ export function DocumentLibrary({ section }: DocumentLibraryProps) {
               title={doc.title}
               instructions={doc.instructions}
               buttons={doc.buttons}
+              emails={doc.emails}
             />
           ))}
         </div>
