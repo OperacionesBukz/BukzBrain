@@ -36,7 +36,7 @@ const operacionesDocuments: DocumentData[] = [
   {
     title: "Creación de productos",
     instructions: "Paso a paso para ingresar nuevas referencias al sistema.",
-    buttons: [{ label: "Descargar Guía Creación", href: "/documents/Creacion_productos.xlsx" }],
+    buttons: [{ label: "Descargar Plantilla Creación", href: "/documents/Creacion_productos.xlsx" }],
   },
   {
     title: "Actualización de productos",
