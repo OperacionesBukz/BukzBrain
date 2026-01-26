@@ -1,13 +1,11 @@
-import { useParams } from "react-router-dom";
 import { DocumentLibrary } from "@/components/documents/DocumentLibrary";
 import { Library, ClipboardList } from "lucide-react";
 
-const Documents = () => {
-  const { section } = useParams<{ section: "librerias" | "operaciones" }>();
-  
-  // Por defecto usar librerías si no hay sección
-  const activeSection = section || "librerias";
+interface DocumentsProps {
+  section: "librerias" | "operaciones";
+}
 
+const Documents = ({ section }: DocumentsProps) => {
   const headerConfig = {
     librerias: {
       title: "Biblioteca de Documentos",
@@ -21,7 +19,7 @@ const Documents = () => {
     },
   };
 
-  const { title, description, icon: Icon } = headerConfig[activeSection];
+  const { title, description, icon: Icon } = headerConfig[section];
 
   return (
     <>
@@ -42,7 +40,7 @@ const Documents = () => {
 
       {/* Content */}
       <div className="p-8">
-        <DocumentLibrary section={activeSection} />
+        <DocumentLibrary section={section} />
       </div>
     </>
   );

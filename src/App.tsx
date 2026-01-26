@@ -21,8 +21,8 @@ function App() {
           }
         >
           <Route path="/" element={<Home />} />
-          <Route path="/operaciones" element={<Documents />} />
-          <Route path="/librerias" element={<Documents />} />
+          <Route path="/operaciones" element={<Documents section="operaciones" />} />
+          <Route path="/librerias" element={<Documents section="librerias" />} />
         </Route>
 
         {/* Redirigir cualquier otra ruta al home */}

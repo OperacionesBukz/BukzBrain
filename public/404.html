@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>BukzBocs</title>
+    <script>
+      // GitHub Pages hack para manejar SPA routing
+      // https://github.com/rafgraph/spa-github-pages
+      // Este script toma la URL actual, la convierte en query parameter
+      // y redirige al index.html para que el router de React pueda manejarla
+      
+      var pathSegmentsToKeep = 1; // Para /BukzBrain/
+      
+      var l = window.location;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
