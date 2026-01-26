@@ -1,36 +1,43 @@
 import { useState } from "react";
-import { Library, ClipboardList, HelpCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Library, ClipboardList, HelpCircle, ChevronLeft, ChevronRight, Home, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logoImage from "@/assets/logo-bukz.png";
+import { useAuth } from "@/hooks/useAuth";
 
 interface NavItem {
   label: string;
   icon: React.ElementType;
-  id: string;
+  path: string;
 }
 
 const navItems: NavItem[] = [
-  { label: "Operaciones", icon: ClipboardList, id: "operaciones" },
-  { label: "Librerías", icon: Library, id: "librerias" },
+  { label: "Home", icon: Home, path: "/" },
+  { label: "Operaciones", icon: ClipboardList, path: "/operaciones" },
+  { label: "Librerías", icon: Library, path: "/librerias" },
 ];
 
 interface SidebarProps {
-  activeSection: string;
-  onSectionChange: (section: string) => void;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 export function Sidebar({ 
-  activeSection, 
-  onSectionChange, 
   collapsed: controlledCollapsed, 
   onCollapsedChange 
 }: SidebarProps) {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { logout } = useAuth();
   
   const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
   const setIsCollapsed = onCollapsedChange || setInternalCollapsed;
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <aside 
@@ -46,13 +53,15 @@ export function Sidebar({
             <img 
               src={logoImage} 
               alt="Company Logo" 
-              className="h-8 w-8 object-contain"
+              className="h-8 w-8 object-contain cursor-pointer"
+              onClick={() => navigate("/")}
             />
           ) : (
             <img 
               src={logoImage} 
               alt="Company Logo" 
-              className="h-10 w-auto object-contain"
+              className="h-10 w-auto object-contain cursor-pointer"
+              onClick={() => navigate("/")}
             />
           )}
         </div>
@@ -73,11 +82,11 @@ export function Sidebar({
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-2 py-4">
           {navItems.map((item) => {
-            const isActive = activeSection === item.id;
+            const isActive = location.pathname === item.path;
             return (
               <button
-                key={item.id}
-                onClick={() => onSectionChange(item.id)}
+                key={item.path}
+                onClick={() => navigate(item.path)}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
                   isCollapsed && "justify-center px-2",
@@ -94,8 +103,8 @@ export function Sidebar({
           })}
         </nav>
 
-        {/* Help section */}
-        <div className="border-t border-sidebar-border p-2">
+        {/* Bottom section with Help and Logout */}
+        <div className="border-t border-sidebar-border p-2 space-y-1">
           <a
             href="#"
             className={cn(
@@ -107,6 +116,18 @@ export function Sidebar({
             <HelpCircle className="h-5 w-5 flex-shrink-0" />
             {!isCollapsed && "Ayuda y Soporte"}
           </a>
+          
+          <button
+            onClick={handleLogout}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-destructive/90 hover:text-destructive-foreground",
+              isCollapsed && "justify-center px-2"
+            )}
+            title={isCollapsed ? "Cerrar Sesión" : undefined}
+          >
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            {!isCollapsed && "Cerrar Sesión"}
+          </button>
         </div>
       </div>
     </aside>
