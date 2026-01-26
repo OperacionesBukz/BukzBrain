@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff } from "lucide-react";
@@ -55,8 +55,8 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg bg-gray-50 border-gray-200">
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-lg" style={{ backgroundColor: '#F5F5F5' }}>
         <CardHeader className="text-center space-y-6 pb-2">
           {/* Logo de la empresa */}
           <div className="flex justify-center">
@@ -67,15 +67,10 @@ const Login = () => {
             />
           </div>
           
-          {/* Título y subtítulo */}
-          <div className="space-y-2">
-            <CardTitle className="text-3xl font-bold text-foreground">
-              Bukz Brain
-            </CardTitle>
-            <CardDescription className="text-base text-muted-foreground">
-              Ingresa tu código de acceso para continuar
-            </CardDescription>
-          </div>
+          {/* Solo subtítulo */}
+          <CardDescription className="text-base text-muted-foreground">
+            Ingresa tu código de acceso para continuar
+          </CardDescription>
         </CardHeader>
 
         <CardContent className="pt-6">
@@ -142,7 +137,7 @@ const Login = () => {
           </form>
 
           {/* Información adicional */}
-          <div className="mt-6 pt-6 border-t border-border">
+          <div className="mt-6 pt-6 border-t border-gray-300">
             <p className="text-xs text-center text-muted-foreground">
               Si no tienes un código de acceso, contacta al administrador del sistema.
             </p>
