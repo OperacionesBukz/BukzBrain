@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Library, ClipboardList } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import logoImage from "@/assets/logo-bukz.png";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -26,12 +27,24 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-8">
-      {/* Header */}
-      <div className="text-center mb-12">
-        <h1 className="text-5xl font-bold text-foreground mb-4">Bukz Brain</h1>
-        <p className="text-lg text-muted-foreground">
-          Sistema de Documentación Interna
-        </p>
+      {/* Header con Logo */}
+      <div className="text-center mb-12 space-y-6">
+        {/* Logo de la empresa */}
+        <div className="flex justify-center mb-6">
+          <img 
+            src={logoImage} 
+            alt="Bukz Logo" 
+            className="h-24 w-auto object-contain"
+          />
+        </div>
+        
+        {/* Título y subtítulo */}
+        <div>
+          <h1 className="text-5xl font-bold text-foreground mb-4">Bukz Brain</h1>
+          <p className="text-lg text-muted-foreground">
+            Sistema de Documentación Interna
+          </p>
+        </div>
       </div>
 
       {/* Cards Grid */}
