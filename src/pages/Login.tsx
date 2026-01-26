@@ -7,8 +7,8 @@ import { Lock } from "lucide-react";
 
 // Códigos de acceso (en un proyecto real, estos deberían estar en el backend)
 const CODES = {
-  ADMIN: "BUKZ2025", // Código maestro
-  EMPLOYEE: "EQUIPO2025", // Código empleado
+  ADMIN: "BUKZ2026", // Código maestro
+  EMPLOYEE: "EQUIPO2026", // Código empleado
 };
 
 const Login = () => {
