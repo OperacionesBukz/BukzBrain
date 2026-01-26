@@ -8,8 +8,8 @@ import logoImage from "@/assets/logo-bukz.png";
 
 // Códigos de acceso (en un proyecto real, estos deberían estar en el backend)
 const CODES = {
-  ADMIN: "BUKZ2026*", // Código maestro
-  EMPLOYEE: "EQUIPO2026*", // Código empleado
+  ADMIN: "BUKZ2025", // Código maestro
+  EMPLOYEE: "EQUIPO2025", // Código empleado
 };
 
 const Login = () => {
@@ -56,7 +56,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
+      <Card className="w-full max-w-md shadow-lg bg-gray-50 border-gray-200">
         <CardHeader className="text-center space-y-6 pb-2">
           {/* Logo de la empresa */}
           <div className="flex justify-center">
@@ -95,7 +95,7 @@ const Login = () => {
                   placeholder="••••••••••"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  className="text-center text-lg tracking-wider uppercase pr-10"
+                  className="text-center text-lg tracking-wider uppercase pr-10 bg-white"
                   maxLength={20}
                   autoFocus
                   autoComplete="off"
