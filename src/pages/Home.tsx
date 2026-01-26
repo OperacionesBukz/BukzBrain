@@ -26,21 +26,21 @@ const Home = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen bg-background flex flex-col items-center p-8 pt-16">
       {/* Header con Logo */}
-      <div className="text-center mb-12 space-y-6">
+      <div className="text-center mb-8 space-y-4">
         {/* Logo de la empresa */}
-        <div className="flex justify-center mb-6">
+        <div className="flex justify-center mb-4">
           <img 
             src={logoImage} 
             alt="Bukz Logo" 
-            className="h-24 w-auto object-contain"
+            className="h-20 w-auto object-contain"
           />
         </div>
         
         {/* Título y subtítulo */}
         <div>
-          <h1 className="text-5xl font-bold text-foreground mb-4">Bukz Brain</h1>
+          <h1 className="text-5xl font-bold text-foreground mb-3">Bukz Brain</h1>
           <p className="text-lg text-muted-foreground">
             Sistema de Documentación Interna
           </p>
@@ -48,7 +48,7 @@ const Home = () => {
       </div>
 
       {/* Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full mt-8">
         {modules.map((module) => {
           const Icon = module.icon;
           return (
