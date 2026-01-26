@@ -54,8 +54,7 @@ const Home = () => {
           return (
             <Card
               key={module.id}
-              className="card-hover-shadow border-border cursor-pointer transition-all duration-300 hover:scale-105"
-              style={{ backgroundColor: '#161A15' }}
+              className="card-hover-shadow border-[#161A15] bg-[#161A15] cursor-pointer transition-all duration-300 hover:scale-105"
               onClick={() => navigate(module.path)}
             >
               <CardHeader className="text-center pb-4">

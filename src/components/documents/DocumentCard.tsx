@@ -47,12 +47,12 @@ export function DocumentCard({ title, instructions, buttons, emails }: DocumentC
   };
 
   return (
-    <Card className="card-hover-shadow border-border bg-card">
+    <Card className="card-hover-shadow border-[#161A15] bg-[#161A15]">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg font-semibold text-card-foreground">
+        <CardTitle className="text-lg font-semibold text-white">
           {title}
         </CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
+        <CardDescription className="text-sm text-gray-300">
           {instructions}
         </CardDescription>
       </CardHeader>
@@ -70,13 +70,13 @@ export function DocumentCard({ title, instructions, buttons, emails }: DocumentC
         ))}
         
         {emails && emails.length > 0 && (
-          <div className="pt-2 border-t border-border mt-3">
-            <p className="text-xs text-muted-foreground mb-2">Enviar solicitud a:</p>
+          <div className="pt-2 border-t border-gray-700 mt-3">
+            <p className="text-xs text-gray-400 mb-2">Enviar solicitud a:</p>
             {emails.map((emailBtn, index) => (
               <Button
                 key={index}
                 variant="outline"
-                className="w-full justify-between mb-2 last:mb-0"
+                className="w-full justify-between mb-2 last:mb-0 bg-transparent border-gray-600 text-gray-200 hover:bg-gray-800 hover:text-white"
                 onClick={() => handleCopyEmail(emailBtn.email)}
               >
                 <span className="flex items-center gap-2">
@@ -87,7 +87,7 @@ export function DocumentCard({ title, instructions, buttons, emails }: DocumentC
                   )}
                   {emailBtn.label}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-gray-400">
                   {copiedEmail === emailBtn.email ? "¡Copiado!" : emailBtn.email}
                 </span>
               </Button>
