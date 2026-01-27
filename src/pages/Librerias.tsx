@@ -1,11 +1,11 @@
 import { DocumentLibrary } from "@/components/documents/DocumentLibrary";
 
-const Librerias = () => {
+const Operaciones = () => {
   return (
     <div className="p-8">
-      <DocumentLibrary section="librerias" />
+      <DocumentLibrary section="operaciones" />
     </div>
   );
 };
 
-export default Librerias;
+export default Operaciones;
