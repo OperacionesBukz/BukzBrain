@@ -8,8 +8,8 @@ interface DocumentsProps {
 const Documents = ({ section }: DocumentsProps) => {
   const headerConfig = {
     librerias: {
-      title: "Biblioteca de Documentos",
-      description: "Descarga formatos, guías e instructivos oficiales de la empresa.",
+      title: "Librerias",
+      description: "Work in progress.",
       icon: Library,
     },
     operaciones: {
