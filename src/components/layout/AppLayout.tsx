@@ -71,12 +71,15 @@ const AppLayout = () => {
 
       {/* Main Content Area with Sidebar */}
       <div className="flex pt-16 flex-1">
-        {/* Collapsible Sidebar */}
+        {/* Collapsible Sidebar - Termina en la línea separadora */}
         <aside 
           className={cn(
-            "fixed left-0 top-16 bottom-0 z-40 bg-sidebar border-r border-sidebar-border transition-all duration-300",
-            sidebarCollapsed ? "w-16" : "w-64"
+            "fixed left-0 top-16 bottom-0 z-40 bg-sidebar transition-all duration-300",
+            sidebarCollapsed ? "w-16" : "w-[180px]"
           )}
+          style={{
+            borderRight: "1px solid hsl(var(--sidebar-border))"
+          }}
         >
           <div className="flex h-full flex-col">
             {/* Navigation */}
@@ -125,7 +128,7 @@ const AppLayout = () => {
         <main 
           className={cn(
             "flex-1 transition-all duration-300",
-            sidebarCollapsed ? "ml-16" : "ml-64"
+            sidebarCollapsed ? "ml-16" : "ml-[180px]"
           )}
         >
           <Outlet />
