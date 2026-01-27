@@ -127,10 +127,12 @@ const AppLayout = () => {
               
               <button
                 onClick={() => {
-                  // Aquí puedes agregar la lógica de cerrar sesión
-                  console.log("Cerrando sesión...");
-                  // Por ejemplo: navigate("/login");
-                  // O: window.location.href = "/logout";
+                  // Limpiar la sesión de Bukz
+                  localStorage.removeItem("bukz_auth");
+                  sessionStorage.clear();
+                  
+                  // Redirigir al login
+                  navigate("/login");
                 }}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50",
