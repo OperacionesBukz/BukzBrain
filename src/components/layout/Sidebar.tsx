@@ -47,8 +47,8 @@ export function Sidebar({
       )}
     >
       <div className="flex h-full flex-col">
-        {/* Logo */}
-        <div className="flex h-16 items-center justify-center border-b border-sidebar-border bg-sidebar px-2">
+        {/* Logo - Altura sincronizada con header (py-6 = 24px arriba + 24px abajo = 48px + contenido) */}
+        <div className="flex items-center justify-center border-b-0 bg-sidebar px-2 py-6">
           {isCollapsed ? (
             <img 
               src={logoImage} 

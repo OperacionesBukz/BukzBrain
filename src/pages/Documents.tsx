@@ -23,8 +23,8 @@ const Documents = ({ section }: DocumentsProps) => {
 
   return (
     <>
-      {/* Header with yellow background */}
-      <header className="border-b border-border bg-primary px-8 py-6">
+      {/* Header con altura sincronizada (py-6) y sin borde conflictivo */}
+      <header className="bg-primary px-8 py-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-foreground">
             <Icon className="h-5 w-5 text-primary" />
@@ -38,8 +38,8 @@ const Documents = ({ section }: DocumentsProps) => {
         </div>
       </header>
 
-      {/* Content */}
-      <div className="p-8">
+      {/* Content con borde superior para separación visual */}
+      <div className="border-t border-border p-8">
         <DocumentLibrary section={section} />
       </div>
     </>
