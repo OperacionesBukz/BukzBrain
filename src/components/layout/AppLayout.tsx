@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Library, ClipboardList, HelpCircle, Menu, Home as HomeIcon } from "lucide-react";
+import { Library, ClipboardList, HelpCircle, Menu, Home as HomeIcon, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logoImage from "@/assets/logo-bukz.png";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,10 @@ const AppLayout = () => {
   };
 
   const { title, subtitle } = getPageTitle();
+
+  // Ancho del sidebar debe coincidir con: botón menú (40px) + gap (16px) + logo (~120px) + gap (16px) = ~256px
+  // Pero vamos a usar un valor exacto de 257px para que termine justo en la línea
+  const sidebarWidth = 257; // px
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -71,13 +75,13 @@ const AppLayout = () => {
 
       {/* Main Content Area with Sidebar */}
       <div className="flex pt-16 flex-1">
-        {/* Collapsible Sidebar - Termina en la línea separadora */}
+        {/* Collapsible Sidebar - Termina exactamente en la línea separadora */}
         <aside 
           className={cn(
-            "fixed left-0 top-16 bottom-0 z-40 bg-sidebar transition-all duration-300",
-            sidebarCollapsed ? "w-16" : "w-[180px]"
+            "fixed left-0 top-16 bottom-0 z-40 bg-sidebar transition-all duration-300"
           )}
           style={{
+            width: sidebarCollapsed ? '64px' : `${sidebarWidth}px`,
             borderRight: "1px solid hsl(var(--sidebar-border))"
           }}
         >
@@ -108,8 +112,8 @@ const AppLayout = () => {
               })}
             </nav>
 
-            {/* Help section at bottom */}
-            <div className="border-t border-sidebar-border p-2">
+            {/* Help and Logout section at bottom */}
+            <div className="border-t border-sidebar-border p-2 space-y-1">
               <button
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50",
@@ -120,16 +124,33 @@ const AppLayout = () => {
                 <HelpCircle className="h-5 w-5 flex-shrink-0" />
                 {!sidebarCollapsed && "Ayuda y Soporte"}
               </button>
+              
+              <button
+                onClick={() => {
+                  // Aquí puedes agregar la lógica de cerrar sesión
+                  console.log("Cerrando sesión...");
+                  // Por ejemplo: navigate("/login");
+                  // O: window.location.href = "/logout";
+                }}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50",
+                  sidebarCollapsed && "justify-center px-2"
+                )}
+                title={sidebarCollapsed ? "Cerrar Sesión" : undefined}
+              >
+                <LogOut className="h-5 w-5 flex-shrink-0" />
+                {!sidebarCollapsed && "Cerrar Sesión"}
+              </button>
             </div>
           </div>
         </aside>
 
         {/* Main Content */}
         <main 
-          className={cn(
-            "flex-1 transition-all duration-300",
-            sidebarCollapsed ? "ml-16" : "ml-[180px]"
-          )}
+          className="flex-1 transition-all duration-300"
+          style={{
+            marginLeft: sidebarCollapsed ? '64px' : `${sidebarWidth}px`
+          }}
         >
           <Outlet />
         </main>
