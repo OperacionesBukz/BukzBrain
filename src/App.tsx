@@ -4,6 +4,8 @@ import { Layout } from "@/components/layout/Layout";
 import Home from "@/pages/Home";
 import Documents from "@/pages/Documents";
 import Login from "@/pages/Login";
+import VacacionesPermisos from "@/pages/VacacionesPermisos";
+import InstructivoCaja from "@/pages/InstructivoCaja";
 
 function App() {
   return (
@@ -23,6 +25,10 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/operaciones" element={<Documents section="operaciones" />} />
           <Route path="/librerias" element={<Documents section="librerias" />} />
+          
+          {/* Nuevas rutas para páginas detalladas de Librerías */}
+          <Route path="/librerias/vacaciones-permisos" element={<VacacionesPermisos />} />
+          <Route path="/librerias/instructivo-caja" element={<InstructivoCaja />} />
         </Route>
 
         {/* Redirigir cualquier otra ruta al home */}
