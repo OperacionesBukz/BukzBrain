@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Library, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const HomeMinimalist = () => {
+const Home = () => {
   const navigate = useNavigate();
 
   const modules = [
@@ -23,59 +23,57 @@ const HomeMinimalist = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="bg-primary border-b border-border">
-        <div className="container mx-auto px-8 py-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Bukz Brain</h1>
-          <p className="text-foreground/70">Sistema de Documentación Interna</p>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 container mx-auto px-8 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
-          {modules.map((module) => {
-            const Icon = module.icon;
-            
-            return (
-              <div
-                key={module.id}
-                className="group relative overflow-hidden rounded-3xl border-2 border-gray-200 bg-white hover:border-primary transition-all duration-300 hover:shadow-2xl"
-              >
-                {/* Card Content */}
-                <div className="p-16 h-full flex flex-col items-center justify-center text-center space-y-8">
-                  {/* Massive Icon - Ultra Focus */}
+    <div className="flex-1 flex items-center justify-center p-8 bg-gray-50">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl w-full">
+        {modules.map((module) => {
+          const Icon = module.icon;
+          
+          return (
+            <div
+              key={module.id}
+              className="group bg-white rounded-3xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100"
+            >
+              {/* Card Content */}
+              <div className="flex flex-col items-center text-center p-12 space-y-6">
+                {/* Icon Section - Top */}
+                <div className="w-full flex items-center justify-center py-8">
                   <div className="relative">
-                    {/* Simple icon - no container, just the icon itself */}
-                    <Icon className="h-40 w-40 text-gray-900 stroke-[1] group-hover:text-primary transition-colors duration-300" />
+                    {/* Icon with subtle background */}
+                    <div className="bg-gray-50 rounded-2xl p-8 group-hover:bg-gray-100 transition-colors duration-300">
+                      <Icon className="h-32 w-32 text-gray-900 stroke-[1]" />
+                    </div>
                   </div>
+                </div>
 
+                {/* Text Content - Bottom */}
+                <div className="space-y-3 w-full">
                   {/* Title */}
-                  <h2 className="text-4xl font-bold text-gray-900">
+                  <h2 className="text-3xl font-bold text-gray-900">
                     {module.title}
                   </h2>
 
-                  {/* Description */}
-                  <p className="text-gray-600 text-lg max-w-md leading-relaxed">
+                  {/* Description/Subtitle */}
+                  <p className="text-gray-600 text-base leading-relaxed max-w-sm mx-auto">
                     {module.description}
                   </p>
 
                   {/* Button */}
-                  <Button
-                    onClick={() => navigate(module.path)}
-                    className="mt-6 bg-gray-900 text-white hover:bg-primary hover:text-gray-900 font-semibold px-10 py-7 text-lg rounded-2xl transition-all duration-200"
-                  >
-                    Acceder al módulo
-                  </Button>
+                  <div className="pt-4">
+                    <Button
+                      onClick={() => navigate(module.path)}
+                      className="bg-gray-900 text-white hover:bg-gray-800 font-medium px-8 py-6 text-base rounded-xl transition-all duration-200 hover:scale-105"
+                    >
+                      Ver en Google Maps
+                    </Button>
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </main>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
 
-export default HomeMinimalist;
+export default Home;

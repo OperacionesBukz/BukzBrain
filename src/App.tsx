@@ -1,41 +1,40 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { Layout } from "@/components/layout/Layout";
-import Home from "@/pages/Home";
-import Documents from "@/pages/Documents";
-import Login from "@/pages/Login";
-import VacacionesPermisos from "@/pages/VacacionesPermisos";
-import InstructivoCaja from "@/pages/InstructivoCaja";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { HashRouter, Routes, Route } from "react-router-dom";
+import AppLayout from "./components/layout/AppLayout";
+import Home from "./pages/Home";
+import Operaciones from "./pages/Operaciones";
+import Librerias from "./pages/Librerias";
+import VacacionesPermisos from "./pages/VacacionesPermisos";
+import NotFound from "./pages/NotFound";
 
-function App() {
-  return (
-    <BrowserRouter basename="/BukzBrain">
-      <Routes>
-        {/* Ruta pública de login */}
-        <Route path="/login" element={<Login />} />
+const queryClient = new QueryClient();
 
-        {/* Rutas protegidas con Layout (sidebar) */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/" element={<Home />} />
-          <Route path="/operaciones" element={<Documents section="operaciones" />} />
-          <Route path="/librerias" element={<Documents section="librerias" />} />
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <HashRouter>
+        <Routes>
+          {/* Rutas con el layout principal (header + sidebar) */}
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/operaciones" element={<Operaciones />} />
+            <Route path="/librerias" element={<Librerias />} />
+          </Route>
+
+          {/* Rutas sin layout (página completa) */}
+          <Route path="/vacaciones-permisos" element={<VacacionesPermisos />} />
           
-          {/* Nuevas rutas para páginas detalladas de Librerías */}
-          <Route path="/librerias/vacaciones-permisos" element={<VacacionesPermisos />} />
-          <Route path="/librerias/instructivo-caja" element={<InstructivoCaja />} />
-        </Route>
-
-        {/* Redirigir cualquier otra ruta al home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  );
-}
+          {/* 404 */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </HashRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;
