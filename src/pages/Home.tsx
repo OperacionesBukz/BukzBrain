@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Library, ClipboardList } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -23,45 +23,65 @@ const Home = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center p-8 pt-16">
-      {/* Header sin Logo */}
-      <div className="text-center mb-8">
-        <h1 className="text-5xl font-bold text-foreground mb-3">Bukz Brain</h1>
-        <p className="text-lg text-muted-foreground">
-          Sistema de Documentación Interna
-        </p>
-      </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <header className="bg-primary border-b border-border">
+        <div className="container mx-auto px-8 py-8">
+          <h1 className="text-4xl font-bold text-foreground mb-2">Bukz Brain</h1>
+          <p className="text-foreground/70">Sistema de Documentación Interna</p>
+        </div>
+      </header>
 
-      {/* Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full mt-8">
-        {modules.map((module) => {
-          const Icon = module.icon;
-          return (
-            <Card
-              key={module.id}
-              className="card-hover-shadow border-[#161A15] bg-[#161A15] cursor-pointer transition-all duration-300 hover:scale-105"
-              onClick={() => navigate(module.path)}
-            >
-              <CardHeader className="text-center pb-4">
-                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary">
-                  <Icon className="h-10 w-10 text-foreground" />
+      {/* Main Content */}
+      <main className="flex-1 container mx-auto px-8 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+          {modules.map((module) => {
+            const Icon = module.icon;
+            
+            return (
+              <div
+                key={module.id}
+                className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-1 transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl"
+              >
+                {/* Gradient border effect */}
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                
+                {/* Card Content */}
+                <div className="relative bg-gray-900 rounded-3xl p-12 h-full flex flex-col items-center justify-center text-center space-y-6">
+                  {/* Large Icon - Main Focus */}
+                  <div className="relative">
+                    {/* Icon glow effect */}
+                    <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150 group-hover:scale-175 transition-transform duration-500" />
+                    
+                    {/* Icon container with yellow background */}
+                    <div className="relative bg-primary rounded-3xl p-8 transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-2xl">
+                      <Icon className="h-24 w-24 text-gray-900 stroke-[1.5]" />
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <h2 className="text-3xl font-bold text-white">
+                    {module.title}
+                  </h2>
+
+                  {/* Description */}
+                  <p className="text-gray-400 text-base max-w-sm leading-relaxed">
+                    {module.description}
+                  </p>
+
+                  {/* Button */}
+                  <Button
+                    onClick={() => navigate(module.path)}
+                    className="mt-4 bg-primary text-gray-900 hover:bg-primary/90 font-semibold px-8 py-6 text-lg rounded-xl transition-all duration-200 hover:scale-105 hover:shadow-xl"
+                  >
+                    Acceder al módulo
+                  </Button>
                 </div>
-                <CardTitle className="text-2xl font-bold text-white">
-                  {module.title}
-                </CardTitle>
-                <CardDescription className="text-base text-gray-300 pt-2">
-                  {module.description}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-center">
-                <button className="mt-4 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-primary/90">
-                  Acceder al módulo
-                </button>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      </main>
     </div>
   );
 };
