@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Operaciones from "./pages/Operaciones";
 import Librerias from "./pages/Librerias";
 import VacacionesPermisos from "./pages/VacacionesPermisos";
+import InstructivoCaja from "./pages/InstructivoCaja";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -39,10 +40,19 @@ const App = () => (
 
           {/* Rutas protegidas sin layout */}
           <Route 
-            path="/vacaciones-permisos" 
+            path="/librerias/vacaciones-permisos" 
             element={
               <ProtectedRoute>
                 <VacacionesPermisos />
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/librerias/instructivo-caja" 
+            element={
+              <ProtectedRoute>
+                <InstructivoCaja />
               </ProtectedRoute>
             } 
           />
