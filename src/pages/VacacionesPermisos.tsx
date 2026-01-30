@@ -8,14 +8,15 @@ const VacacionesPermisos = () => {
   const navigate = useNavigate();
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
-  const handleDownload = (href: string) => {
-    if (href === "#") return;
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = href.split("/").pop() || "download";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Enlaces de descarga directa de Google Drive
+  const DOWNLOAD_LINKS = {
+    vacaciones: "https://drive.google.com/uc?export=download&id=1PpTixZg3VcuhHt5W8bTD1aMW_HmW9eUU",
+    permisos: "https://docs.google.com/spreadsheets/d/1oEZbeVwNr0wGQNNNisqfG7ps2vKCBzLJ/export?format=xlsx"
+  };
+
+  const handleDownload = (url: string) => {
+    // Abrir en nueva pestaña para forzar descarga
+    window.open(url, '_blank');
   };
 
   const handleCopyEmail = async (email: string) => {
@@ -81,19 +82,19 @@ const VacacionesPermisos = () => {
             <Button
               variant="default"
               className="w-full justify-start mb-3"
-              onClick={() => handleDownload("./documents/FORMATO_SOLICITUD_VACACIONES.pdf")}
+              onClick={() => handleDownload(DOWNLOAD_LINKS.vacaciones)}
             >
               <Download className="h-4 w-4 mr-2" />
-              Descargar Formato Vacaciones
+              Descargar Formato Vacaciones (PDF)
             </Button>
 
             <Button
               variant="default"
               className="w-full justify-start"
-              onClick={() => handleDownload("/documents/FORMATO_SOLICITUD_DE_PERMISO.xlsx")}
+              onClick={() => handleDownload(DOWNLOAD_LINKS.permisos)}
             >
               <Download className="h-4 w-4 mr-2" />
-              Descargar Formato Permiso
+              Descargar Formato Permiso (Excel)
             </Button>
           </CardContent>
         </Card>
@@ -120,8 +121,8 @@ const VacacionesPermisos = () => {
             </div>
             
             <div>
-              <h3 className="font-semibold text-white mb-2">4. Espera la aprobación</h3>
-              <p>Recibirás una respuesta por correo electrónico sobre el estado de tu solicitud.</p>
+              <h3 className="font-semibold text-white mb-2">4. Espera confirmación</h3>
+              <p>Recibirás una respuesta sobre el estado de tu solicitud en un plazo máximo de 3 días hábiles.</p>
             </div>
           </CardContent>
         </Card>
@@ -129,48 +130,60 @@ const VacacionesPermisos = () => {
         {/* Contactos */}
         <Card className="bg-[#161A15] border-[#161A15]">
           <CardHeader>
-            <CardTitle className="text-white">Enviar Solicitud A:</CardTitle>
+            <CardTitle className="text-white">Correos de Contacto</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-gray-300 mb-4">
-              Una vez completes el formato, envíalo a los siguientes correos electrónicos:
+              Envía tus formatos completados a los siguientes correos:
             </p>
+            
+            <div className="space-y-3">
+              {/* Correo Recursos Humanos */}
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div className="flex-1">
+                  <p className="text-sm text-gray-400">Recursos Humanos</p>
+                  <p className="text-white font-medium">rrhh@bukz.com.co</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleCopyEmail("rrhh@bukz.com.co")}
+                  className="text-white hover:bg-white/10"
+                >
+                  {copiedEmail === "rrhh@bukz.com.co" ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
 
-            <Button
-              variant="outline"
-              className="w-full justify-between bg-transparent border-gray-600 text-gray-200 hover:bg-gray-800 hover:text-white"
-              onClick={() => handleCopyEmail("operaciones@bukz.co")}
-            >
-              <span className="flex items-center gap-2">
-                {copiedEmail === "operaciones@bukz.co" ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-                Operaciones
-              </span>
-              <span className="text-xs text-gray-400">
-                {copiedEmail === "operaciones@bukz.co" ? "¡Copiado!" : "operaciones@bukz.co"}
-              </span>
-            </Button>
+              {/* Correo Administración */}
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div className="flex-1">
+                  <p className="text-sm text-gray-400">Administración</p>
+                  <p className="text-white font-medium">admin@bukz.com.co</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleCopyEmail("admin@bukz.com.co")}
+                  className="text-white hover:bg-white/10"
+                >
+                  {copiedEmail === "admin@bukz.com.co" ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
 
-            <Button
-              variant="outline"
-              className="w-full justify-between bg-transparent border-gray-600 text-gray-200 hover:bg-gray-800 hover:text-white"
-              onClick={() => handleCopyEmail("rh@bukz.co")}
-            >
-              <span className="flex items-center gap-2">
-                {copiedEmail === "rh@bukz.co" ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-                Recursos Humanos
-              </span>
-              <span className="text-xs text-gray-400">
-                {copiedEmail === "rh@bukz.co" ? "¡Copiado!" : "rh@bukz.co"}
-              </span>
-            </Button>
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-sm text-blue-300">
+                💡 <strong>Tip:</strong> Haz clic en el ícono de copiar para copiar rápidamente el correo a tu portapapeles.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
