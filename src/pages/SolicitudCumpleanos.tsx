@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import emailjs from '@emailjs/browser';
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 const SolicitudCumpleanos = () => {
   const navigate = useNavigate();
@@ -231,18 +232,22 @@ const SolicitudCumpleanos = () => {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal bg-white"
+                          className={cn(
+                            "w-full justify-start text-left font-normal bg-white",
+                            !fecha && "text-muted-foreground"
+                          )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {fecha ? format(fecha, "PPP", { locale: es }) : "Seleccionar fecha"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
+                      <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
                           selected={fecha}
                           onSelect={setFecha}
                           locale={es}
+                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
