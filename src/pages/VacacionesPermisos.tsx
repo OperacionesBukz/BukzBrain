@@ -1,33 +1,47 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Copy, Check } from "lucide-react";
+import { ArrowLeft, Calendar, UserCheck, Clock, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const VacacionesPermisos = () => {
   const navigate = useNavigate();
-  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
-  // Enlaces de descarga directa de Google Drive
-  const DOWNLOAD_LINKS = {
-    vacaciones: "https://drive.google.com/uc?export=download&id=1PpTixZg3VcuhHt5W8bTD1aMW_HmW9eUU",
-    permisos: "https://docs.google.com/spreadsheets/d/1oEZbeVwNr0wGQNNNisqfG7ps2vKCBzLJ/export?format=xlsx"
-  };
-
-  const handleDownload = (url: string) => {
-    // Abrir en nueva pestaña para forzar descarga
-    window.open(url, '_blank');
-  };
-
-  const handleCopyEmail = async (email: string) => {
-    try {
-      await navigator.clipboard.writeText(email);
-      setCopiedEmail(email);
-      setTimeout(() => setCopiedEmail(null), 2000);
-    } catch (err) {
-      console.error("Error copying email:", err);
+  const solicitudes = [
+    {
+      id: "vacaciones",
+      title: "Solicitud de Vacaciones",
+      description: "Solicita tus vacaciones anuales",
+      icon: Calendar,
+      color: "bg-blue-500",
+      route: "/librerias/solicitud/vacaciones"
+    },
+    {
+      id: "permiso-remunerado",
+      title: "Permiso Remunerado",
+      description: "Solicita un permiso con goce de salario",
+      icon: UserCheck,
+      color: "bg-green-500",
+      route: "/librerias/solicitud/permiso-remunerado",
+      disabled: true
+    },
+    {
+      id: "permiso-no-remunerado",
+      title: "Permiso No Remunerado",
+      description: "Solicita un permiso sin goce de salario",
+      icon: Clock,
+      color: "bg-orange-500",
+      route: "/librerias/solicitud/permiso-no-remunerado",
+      disabled: true
+    },
+    {
+      id: "dia-cumpleaños",
+      title: "Día de Cumpleaños",
+      description: "Solicita tu día de cumpleaños",
+      icon: Gift,
+      color: "bg-purple-500",
+      route: "/librerias/solicitud/cumpleanos"
     }
-  };
+  ];
 
   return (
     <>
@@ -44,146 +58,98 @@ const VacacionesPermisos = () => {
             Volver
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Vacaciones y Permisos</h1>
+            <h1 className="text-2xl font-bold text-foreground">Solicitudes de Permisos y Vacaciones</h1>
             <p className="text-sm text-foreground/80">
-              Procedimientos y formatos para solicitudes de novedades
+              Selecciona el tipo de solicitud que deseas realizar
             </p>
           </div>
         </div>
       </header>
 
       {/* Content */}
-      <div className="p-8 max-w-4xl mx-auto">
-        {/* Introducción */}
+      <div className="p-8 max-w-6xl mx-auto">
+        {/* Información General */}
         <Card className="mb-6 bg-[#161A15] border-[#161A15]">
           <CardHeader>
             <CardTitle className="text-white">Información General</CardTitle>
           </CardHeader>
           <CardContent className="text-gray-300 space-y-3">
             <p>
-              Esta sección contiene los formatos oficiales requeridos para la solicitud de vacaciones
-              y permisos. Es importante seguir el procedimiento establecido para garantizar el correcto
-              procesamiento de tu solicitud.
+              Este sistema te permite gestionar tus solicitudes de vacaciones, permisos y días especiales
+              de forma rápida y digital. Completa el formulario correspondiente y se enviará automáticamente
+              a Recursos Humanos.
             </p>
           </CardContent>
         </Card>
 
-        {/* Formatos Disponibles */}
-        <Card className="mb-6 bg-[#161A15] border-[#161A15]">
-          <CardHeader>
-            <CardTitle className="text-white">Formatos Requeridos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-gray-300 mb-4">
-              Descarga el formato correspondiente, complétalo con tus datos y envíalo a los correos indicados más abajo.
-            </p>
-            
-            {/* Botones de descarga */}
-            <Button
-              variant="default"
-              className="w-full justify-start mb-3"
-              onClick={() => handleDownload(DOWNLOAD_LINKS.vacaciones)}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Descargar Formato Vacaciones (PDF)
-            </Button>
-
-            <Button
-              variant="default"
-              className="w-full justify-start"
-              onClick={() => handleDownload(DOWNLOAD_LINKS.permisos)}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Descargar Formato Permiso (Excel)
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Procedimiento */}
-        <Card className="mb-6 bg-[#161A15] border-[#161A15]">
-          <CardHeader>
-            <CardTitle className="text-white">Procedimiento de Solicitud</CardTitle>
-          </CardHeader>
-          <CardContent className="text-gray-300 space-y-4">
-            <div>
-              <h3 className="font-semibold text-white mb-2">1. Descarga el formato</h3>
-              <p>Selecciona el formato correspondiente según tu necesidad (Vacaciones o Permiso).</p>
-            </div>
-            
-            <div>
-              <h3 className="font-semibold text-white mb-2">2. Completa la información</h3>
-              <p>Llena todos los campos requeridos con información clara y precisa.</p>
-            </div>
-            
-            <div>
-              <h3 className="font-semibold text-white mb-2">3. Envía tu solicitud</h3>
-              <p>Envía el formato completo a los correos indicados en la sección de contactos.</p>
-            </div>
-            
-            <div>
-              <h3 className="font-semibold text-white mb-2">4. Espera confirmación</h3>
-              <p>Recibirás una respuesta sobre el estado de tu solicitud en un plazo máximo de 3 días hábiles.</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Contactos */}
-        <Card className="bg-[#161A15] border-[#161A15]">
-          <CardHeader>
-            <CardTitle className="text-white">Correos de Contacto</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-gray-300 mb-4">
-              Envía tus formatos completados a los siguientes correos:
-            </p>
-            
-            <div className="space-y-3">
-              {/* Correo Recursos Humanos */}
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                <div className="flex-1">
-                  <p className="text-sm text-gray-400">Recursos Humanos</p>
-                  <p className="text-white font-medium">rrhh@bukz.com.co</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleCopyEmail("rrhh@bukz.com.co")}
-                  className="text-white hover:bg-white/10"
-                >
-                  {copiedEmail === "rrhh@bukz.com.co" ? (
-                    <Check className="h-4 w-4" />
+        {/* Grid de Solicitudes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {solicitudes.map((solicitud) => {
+            const Icon = solicitud.icon;
+            return (
+              <Card
+                key={solicitud.id}
+                className={`bg-[#161A15] border-[#161A15] transition-all ${
+                  solicitud.disabled 
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : 'hover:shadow-lg hover:scale-[1.02] cursor-pointer'
+                }`}
+                onClick={() => !solicitud.disabled && navigate(solicitud.route)}
+              >
+                <CardHeader>
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-lg ${solicitud.color}`}>
+                      <Icon className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <CardTitle className="text-white flex items-center gap-2">
+                        {solicitud.title}
+                        {solicitud.disabled && (
+                          <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
+                            Próximamente
+                          </span>
+                        )}
+                      </CardTitle>
+                      <CardDescription className="text-gray-400 mt-2">
+                        {solicitud.description}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!solicitud.disabled ? (
+                    <Button 
+                      variant="default" 
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(solicitud.route);
+                      }}
+                    >
+                      Iniciar Solicitud
+                    </Button>
                   ) : (
-                    <Copy className="h-4 w-4" />
+                    <Button 
+                      variant="secondary" 
+                      className="w-full" 
+                      disabled
+                    >
+                      Disponible Pronto
+                    </Button>
                   )}
-                </Button>
-              </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
 
-              {/* Correo Administración */}
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                <div className="flex-1">
-                  <p className="text-sm text-gray-400">Administración</p>
-                  <p className="text-white font-medium">admin@bukz.com.co</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleCopyEmail("admin@bukz.com.co")}
-                  className="text-white hover:bg-white/10"
-                >
-                  {copiedEmail === "admin@bukz.com.co" ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-              <p className="text-sm text-blue-300">
-                💡 <strong>Tip:</strong> Haz clic en el ícono de copiar para copiar rápidamente el correo a tu portapapeles.
-              </p>
-            </div>
+        {/* Nota Importante */}
+        <Card className="mt-6 bg-blue-500/10 border-blue-500/20">
+          <CardContent className="pt-6">
+            <p className="text-sm text-blue-300">
+              <strong>Nota:</strong> Todas las solicitudes deben contar con la aprobación de tu jefe inmediato.
+              Una vez enviada la solicitud, recibirás confirmación por correo electrónico.
+            </p>
           </CardContent>
         </Card>
       </div>
