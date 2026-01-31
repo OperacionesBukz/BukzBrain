@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import emailjs from '@emailjs/browser';
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 const SolicitudVacaciones = () => {
   const navigate = useNavigate();
@@ -238,18 +239,22 @@ const SolicitudVacaciones = () => {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal bg-white"
+                          className={cn(
+                            "w-full justify-start text-left font-normal bg-white",
+                            !fechaInicio && "text-muted-foreground"
+                          )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {fechaInicio ? format(fechaInicio, "PPP", { locale: es }) : "Seleccionar"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
+                      <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
                           selected={fechaInicio}
                           onSelect={setFechaInicio}
                           locale={es}
+                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
@@ -262,19 +267,23 @@ const SolicitudVacaciones = () => {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal bg-white"
+                          className={cn(
+                            "w-full justify-start text-left font-normal bg-white",
+                            !fechaFin && "text-muted-foreground"
+                          )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {fechaFin ? format(fechaFin, "PPP", { locale: es }) : "Seleccionar"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
+                      <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
                           selected={fechaFin}
                           onSelect={setFechaFin}
                           locale={es}
                           disabled={(date) => fechaInicio ? date < fechaInicio : false}
+                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
@@ -287,19 +296,23 @@ const SolicitudVacaciones = () => {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-left font-normal bg-white"
+                          className={cn(
+                            "w-full justify-start text-left font-normal bg-white",
+                            !fechaReingreso && "text-muted-foreground"
+                          )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {fechaReingreso ? format(fechaReingreso, "PPP", { locale: es }) : "Seleccionar"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
+                      <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
                           selected={fechaReingreso}
                           onSelect={setFechaReingreso}
                           locale={es}
                           disabled={(date) => fechaFin ? date <= fechaFin : false}
+                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
