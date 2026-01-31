@@ -2,12 +2,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import Home from "./pages/Home";
 import Operaciones from "./pages/Operaciones";
 import Librerias from "./pages/Librerias";
 import VacacionesPermisos from "./pages/VacacionesPermisos";
+import SolicitudVacaciones from "./pages/SolicitudVacaciones";
+import SolicitudCumpleanos from "./pages/SolicitudCumpleanos";
 import InstructivoCaja from "./pages/InstructivoCaja";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -20,7 +22,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <HashRouter>
+      <BrowserRouter basename="/BukzBrain">
         <Routes>
           {/* Ruta de Login (sin layout) */}
           <Route path="/login" element={<Login />} />
@@ -38,7 +40,7 @@ const App = () => (
             <Route path="/librerias" element={<Librerias />} />
           </Route>
 
-          {/* Rutas protegidas sin layout */}
+          {/* Rutas protegidas sin layout - Página principal de solicitudes */}
           <Route 
             path="/librerias/vacaciones-permisos" 
             element={
@@ -47,7 +49,27 @@ const App = () => (
               </ProtectedRoute>
             } 
           />
+
+          {/* Rutas de formularios de solicitudes */}
+          <Route 
+            path="/librerias/solicitud/vacaciones" 
+            element={
+              <ProtectedRoute>
+                <SolicitudVacaciones />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/librerias/solicitud/cumpleanos" 
+            element={
+              <ProtectedRoute>
+                <SolicitudCumpleanos />
+              </ProtectedRoute>
+            } 
+          />
           
+          {/* Instructivo de Caja */}
           <Route 
             path="/librerias/instructivo-caja" 
             element={
@@ -60,7 +82,7 @@ const App = () => (
           {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );

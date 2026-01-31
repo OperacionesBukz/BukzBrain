@@ -34,6 +34,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_EMAILJS_SERVICE_ID: ${{ secrets.VITE_EMAILJS_SERVICE_ID }}
+          VITE_EMAILJS_PUBLIC_KEY: ${{ secrets.VITE_EMAILJS_PUBLIC_KEY }}
+          VITE_EMAILJS_TEMPLATE_VACACIONES: ${{ secrets.VITE_EMAILJS_TEMPLATE_VACACIONES }}
+          VITE_EMAILJS_TEMPLATE_CUMPLEANOS: ${{ secrets.VITE_EMAILJS_TEMPLATE_CUMPLEANOS }}
         run: npm run build
 
       - name: Setup Pages
