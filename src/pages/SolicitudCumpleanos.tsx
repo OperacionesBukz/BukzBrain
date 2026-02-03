@@ -127,7 +127,7 @@ const SolicitudCumpleanos = () => {
             Volver
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Solicitud de Día de Cumpleaños</h1>
+            <h1 className="text-xl font-bold text-foreground">Solicitud de Día de Cumpleaños</h1>
             <p className="text-sm text-foreground/80">
               Completa el formulario para solicitar tu día de cumpleaños
             </p>
@@ -136,16 +136,16 @@ const SolicitudCumpleanos = () => {
       </header>
 
       {/* Content */}
-      <div className="p-8 max-w-4xl mx-auto">
+      <div className="p-6 max-w-5xl mx-auto">
         <Card className="bg-[#161A15] border-[#161A15]">
           <CardHeader>
             <CardTitle className="text-white">Información del Solicitante</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {/* Datos Personales */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="solicitante" className="text-gray-300">
                     Nombre Completo *
                   </Label>
@@ -160,7 +160,7 @@ const SolicitudCumpleanos = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="documento" className="text-gray-300">
                     Documento de Identidad *
                   </Label>
@@ -175,7 +175,7 @@ const SolicitudCumpleanos = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="cargo" className="text-gray-300">
                     Cargo *
                   </Label>
@@ -190,7 +190,7 @@ const SolicitudCumpleanos = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="sede" className="text-gray-300">
                     Sede *
                   </Label>
@@ -223,10 +223,10 @@ const SolicitudCumpleanos = () => {
 
               {/* Fecha */}
               <div className="space-y-4 pt-4 border-t border-gray-700">
-                <h3 className="text-lg font-semibold text-white">Fecha del Día de Cumpleaños</h3>
+                <h3 className="text-base font-semibold text-white">Fecha del Día de Cumpleaños</h3>
                 
                 <div className="max-w-sm">
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <Label className="text-gray-300">Fecha *</Label>
                     <Popover>
                       <PopoverTrigger asChild>
@@ -268,7 +268,7 @@ const SolicitudCumpleanos = () => {
               </div>
 
               {/* Botones */}
-              <div className="flex gap-4 pt-6">
+              <div className="flex gap-4 pt-4">
                 <Button
                   type="button"
                   variant="outline"
@@ -300,7 +300,6 @@ const SolicitudCumpleanos = () => {
           </CardContent>
         </Card>
       </div>
-    </>
   );
 };
 

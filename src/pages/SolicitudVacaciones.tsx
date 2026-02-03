@@ -119,10 +119,10 @@ const SolicitudVacaciones = () => {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-6 max-w-5xl mx-auto">
       <Card className="bg-[#161A15] border-[#161A15]">
-        <CardHeader>
-          <div className="flex items-center gap-4 mb-4">
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-4 mb-3">
             <Button
               variant="ghost"
               size="sm"
@@ -133,17 +133,17 @@ const SolicitudVacaciones = () => {
               Volver
             </Button>
           </div>
-          <CardTitle className="text-white text-2xl">Solicitud de Vacaciones</CardTitle>
-          <p className="text-gray-400 text-sm mt-2">
+          <CardTitle className="text-white text-xl">Solicitud de Vacaciones</CardTitle>
+          <p className="text-gray-400 text-sm mt-1">
             Completa el formulario para solicitar tus vacaciones
           </p>
         </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {/* Datos Personales */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="solicitante" className="text-gray-300">
+                <div className="space-y-1.5">
+                  <Label htmlFor="solicitante" className="text-gray-300 text-sm">
                     Nombre Completo *
                   </Label>
                   <Input
@@ -157,8 +157,8 @@ const SolicitudVacaciones = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="documento" className="text-gray-300">
+                <div className="space-y-1.5">
+                  <Label htmlFor="documento" className="text-gray-300 text-sm">
                     Documento de Identidad *
                   </Label>
                   <Input
@@ -172,8 +172,8 @@ const SolicitudVacaciones = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="cargo" className="text-gray-300">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cargo" className="text-gray-300 text-sm">
                     Cargo *
                   </Label>
                   <Input
@@ -187,8 +187,8 @@ const SolicitudVacaciones = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="sede" className="text-gray-300">
+                <div className="space-y-1.5">
+                  <Label htmlFor="sede" className="text-gray-300 text-sm">
                     Sede *
                   </Label>
                   <Input
@@ -203,7 +203,7 @@ const SolicitudVacaciones = () => {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="jefe_inmediato" className="text-gray-300">
+                  <Label htmlFor="jefe_inmediato" className="text-gray-300 text-sm">
                     Jefe Inmediato *
                   </Label>
                   <Input
@@ -219,13 +219,13 @@ const SolicitudVacaciones = () => {
               </div>
 
               {/* Fechas */}
-              <div className="space-y-4 pt-4 border-t border-gray-700">
-                <h3 className="text-lg font-semibold text-white">Período de Vacaciones</h3>
+              <div className="space-y-3 pt-3 border-t border-gray-700">
+                <h3 className="text-base font-semibold text-white">Período de Vacaciones</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Fecha Inicio */}
-                  <div className="space-y-2">
-                    <Label className="text-gray-300">Fecha de Inicio *</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-gray-300 text-sm">Fecha de Inicio *</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
@@ -253,8 +253,8 @@ const SolicitudVacaciones = () => {
                   </div>
 
                   {/* Fecha Fin */}
-                  <div className="space-y-2">
-                    <Label className="text-gray-300">Fecha de Finalización *</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-gray-300 text-sm">Fecha de Finalización *</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
@@ -283,8 +283,8 @@ const SolicitudVacaciones = () => {
                   </div>
 
                   {/* Fecha Reingreso */}
-                  <div className="space-y-2">
-                    <Label className="text-gray-300">Fecha de Reingreso *</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-gray-300 text-sm">Fecha de Reingreso *</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
@@ -315,19 +315,19 @@ const SolicitudVacaciones = () => {
               </div>
 
               {/* Botones */}
-              <div className="flex gap-4 pt-6">
+              <div className="flex gap-4 pt-4">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => navigate("/solicitudes")}
-                  className="flex-1"
+                  className="flex-1 h-10"
                   disabled={isLoading}
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
-                  className="flex-1"
+                  className="flex-1 h-10"
                   disabled={isLoading}
                 >
                   {isLoading ? (
