@@ -7,7 +7,7 @@ import AppLayout from "./components/layout/AppLayout";
 import Home from "./pages/Home";
 import Operaciones from "./pages/Operaciones";
 import Librerias from "./pages/Librerias";
-import VacacionesPermisos from "./pages/VacacionesPermisos";
+import Solicitudes from "./pages/Solicitudes";
 import SolicitudVacaciones from "./pages/SolicitudVacaciones";
 import SolicitudCumpleanos from "./pages/SolicitudCumpleanos";
 import InstructivoCaja from "./pages/InstructivoCaja";
@@ -38,46 +38,31 @@ const App = () => (
             <Route path="/" element={<Home />} />
             <Route path="/operaciones" element={<Operaciones />} />
             <Route path="/librerias" element={<Librerias />} />
+            <Route path="/solicitudes" element={<Solicitudes />} />
           </Route>
 
-          {/* Rutas protegidas sin layout - Página principal de solicitudes */}
+          {/* Rutas de formularios de solicitudes (con layout) */}
           <Route 
-            path="/librerias/vacaciones-permisos" 
             element={
               <ProtectedRoute>
-                <VacacionesPermisos />
+                <AppLayout />
               </ProtectedRoute>
-            } 
-          />
-
-          {/* Rutas de formularios de solicitudes */}
-          <Route 
-            path="/librerias/solicitud/vacaciones" 
-            element={
-              <ProtectedRoute>
-                <SolicitudVacaciones />
-              </ProtectedRoute>
-            } 
-          />
-
-          <Route 
-            path="/librerias/solicitud/cumpleanos" 
-            element={
-              <ProtectedRoute>
-                <SolicitudCumpleanos />
-              </ProtectedRoute>
-            } 
-          />
+            }
+          >
+            <Route path="/solicitudes/vacaciones" element={<SolicitudVacaciones />} />
+            <Route path="/solicitudes/cumpleanos" element={<SolicitudCumpleanos />} />
+          </Route>
           
-          {/* Instructivo de Caja */}
+          {/* Instructivo de Caja (con layout) */}
           <Route 
-            path="/librerias/instructivo-caja" 
             element={
               <ProtectedRoute>
-                <InstructivoCaja />
+                <AppLayout />
               </ProtectedRoute>
-            } 
-          />
+            }
+          >
+            <Route path="/librerias/instructivo-caja" element={<InstructivoCaja />} />
+          </Route>
           
           {/* 404 */}
           <Route path="*" element={<NotFound />} />

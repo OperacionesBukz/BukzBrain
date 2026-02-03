@@ -1,162 +1,199 @@
-import { useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Library, ClipboardList, HelpCircle, Menu, Home as HomeIcon, LogOut } from "lucide-react";
-import { cn } from "@/lib/utils";
-import logoImage from "@/assets/logo-bukz.png";
+import { Home, FileText, BookOpen, LogOut, HelpCircle, Menu as MenuIcon } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-
-interface NavItem {
-  label: string;
-  icon: React.ElementType;
-  id: string;
-  path: string;
-}
-
-const navItems: NavItem[] = [
-  { label: "Home", icon: HomeIcon, id: "home", path: "/" },
-  { label: "Operaciones", icon: ClipboardList, id: "operaciones", path: "/operaciones" },
-  { label: "Librerías", icon: Library, id: "librerias", path: "/librerias" },
-];
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const AppLayout = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const [showHelpDialog, setShowHelpDialog] = useState(false);
+  const [username, setUsername] = useState("");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Determine page title based on current path
-  const getPageTitle = () => {
-    const currentPath = location.pathname;
-    if (currentPath === "/") return { title: "Bukz Brain", subtitle: "Sistema de Documentación Interna" };
-    if (currentPath.includes("/operaciones")) return { title: "Operaciones", subtitle: "Guías y procedimientos para gestión operativa" };
-    if (currentPath.includes("/librerias")) return { title: "Biblioteca de Documentos", subtitle: "Descarga formatos, guías e instructivos oficiales" };
-    return { title: "Bukz Brain", subtitle: "Sistema de Documentación Interna" };
+  useEffect(() => {
+    // Obtener el usuario del localStorage
+    const user = localStorage.getItem("username");
+    if (user) {
+      setUsername(user);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("isAuthenticated");
+    localStorage.removeItem("userRole");
+    localStorage.removeItem("username");
+    navigate("/login");
   };
 
-  const { title, subtitle } = getPageTitle();
+  const menuItems = [
+    { icon: Home, label: "Inicio", path: "/" },
+    { icon: FileText, label: "Operaciones", path: "/operaciones" },
+    { icon: BookOpen, label: "Librerías", path: "/librerias" },
+    { icon: FileText, label: "Solicitudes", path: "/solicitudes" },
+  ];
 
-  // Ancho del sidebar debe coincidir con: botón menú (40px) + gap (16px) + logo (~120px) + gap (16px) = ~256px
-  // Pero vamos a usar un valor exacto de 257px para que termine justo en la línea
-  const sidebarWidth = 257; // px
+  const isActive = (path: string) => location.pathname === path;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Fixed Header - Shopify Style */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-primary border-b border-yellow-600 h-16">
-        <div className="h-full flex items-center px-4 gap-4">
-          {/* Sidebar Toggle Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="text-foreground hover:bg-foreground/10 flex-shrink-0"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
+      {/* Header */}
+      <header className="border-b border-border bg-primary sticky top-0 z-50">
+        <div className="px-4 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo y menú mobile */}
+            <div className="flex items-center gap-4">
+              {/* Menú hamburguesa para móvil */}
+              <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+                <SheetTrigger asChild className="lg:hidden">
+                  <Button variant="ghost" size="icon" className="text-foreground">
+                    <MenuIcon className="h-6 w-6" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-64 bg-primary">
+                  <nav className="flex flex-col gap-2 mt-8">
+                    {menuItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.path}
+                          onClick={() => {
+                            navigate(item.path);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                            isActive(item.path)
+                              ? "bg-foreground/10 text-foreground"
+                              : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground"
+                          }`}
+                        >
+                          <Icon className="h-5 w-5" />
+                          <span className="font-medium">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </SheetContent>
+              </Sheet>
 
-          {/* Logo */}
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <img 
-              src={logoImage} 
-              alt="Bukz Logo" 
-              className="h-8 w-auto object-contain"
-            />
-          </div>
+              {/* Logo - clickeable para ir a home */}
+              <button
+                onClick={() => navigate("/")}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              >
+                <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
+                  <span className="text-accent-foreground font-bold text-lg">B</span>
+                </div>
+                <span className="text-xl font-bold text-foreground hidden sm:block">
+                  BukzBrain
+                </span>
+              </button>
+            </div>
 
-          {/* Vertical Separator */}
-          <div className="h-8 w-px bg-foreground/20" />
-
-          {/* Page Title */}
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold text-foreground truncate">{title}</h1>
-            <p className="text-xs text-foreground/70 truncate hidden sm:block">{subtitle}</p>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content Area with Sidebar */}
-      <div className="flex pt-16 flex-1">
-        {/* Collapsible Sidebar - Termina exactamente en la línea separadora */}
-        <aside 
-          className={cn(
-            "fixed left-0 top-16 bottom-0 z-40 bg-sidebar transition-all duration-300"
-          )}
-          style={{
-            width: sidebarCollapsed ? '64px' : `${sidebarWidth}px`,
-            borderRight: "1px solid hsl(var(--sidebar-border))"
-          }}
-        >
-          <div className="flex h-full flex-col">
-            {/* Navigation */}
-            <nav className="flex-1 space-y-1 px-2 py-4 overflow-y-auto">
-              {navItems.map((item) => {
-                const isActive = location.pathname === item.path;
+            {/* Menú desktop */}
+            <nav className="hidden lg:flex items-center gap-2">
+              {menuItems.map((item) => {
                 const Icon = item.icon;
-                
                 return (
                   <button
-                    key={item.id}
+                    key={item.path}
                     onClick={() => navigate(item.path)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
-                      sidebarCollapsed && "justify-center px-2",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent/50 font-medium"
-                    )}
-                    title={sidebarCollapsed ? item.label : undefined}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      isActive(item.path)
+                        ? "bg-foreground/10 text-foreground"
+                        : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground"
+                    }`}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
-                    {!sidebarCollapsed && item.label}
+                    <Icon className="h-4 w-4" />
+                    <span className="font-medium">{item.label}</span>
                   </button>
                 );
               })}
             </nav>
 
-            {/* Help and Logout section at bottom */}
-            <div className="border-t border-sidebar-border p-2 space-y-1">
-              <button
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50",
-                  sidebarCollapsed && "justify-center px-2"
-                )}
-                title={sidebarCollapsed ? "Ayuda y Soporte" : undefined}
+            {/* Usuario y acciones */}
+            <div className="flex items-center gap-2">
+              {/* Botón de Ayuda */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowHelpDialog(true)}
+                className="text-foreground hover:bg-foreground/10"
+                title="Ayuda y Soporte"
               >
-                <HelpCircle className="h-5 w-5 flex-shrink-0" />
-                {!sidebarCollapsed && "Ayuda y Soporte"}
-              </button>
-              
-              <button
-                onClick={() => {
-                  // Limpiar la sesión de Bukz
-                  localStorage.removeItem("bukz_auth");
-                  sessionStorage.clear();
-                  
-                  // Redirigir al login
-                  navigate("/login");
-                }}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50",
-                  sidebarCollapsed && "justify-center px-2"
-                )}
-                title={sidebarCollapsed ? "Cerrar Sesión" : undefined}
+                <HelpCircle className="h-5 w-5" />
+              </Button>
+
+              {/* Usuario */}
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-foreground/10 rounded-lg">
+                <div className="w-6 h-6 bg-accent rounded-full flex items-center justify-center">
+                  <span className="text-accent-foreground text-xs font-semibold">
+                    {username.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <span className="text-sm font-medium text-foreground">{username}</span>
+              </div>
+
+              {/* Logout */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-foreground hover:bg-foreground/10"
+                title="Cerrar sesión"
               >
-                <LogOut className="h-5 w-5 flex-shrink-0" />
-                {!sidebarCollapsed && "Cerrar Sesión"}
-              </button>
+                <LogOut className="h-5 w-5" />
+              </Button>
             </div>
           </div>
-        </aside>
+        </div>
+      </header>
 
-        {/* Main Content */}
-        <main 
-          className="flex-1 transition-all duration-300"
-          style={{
-            marginLeft: sidebarCollapsed ? '64px' : `${sidebarWidth}px`
-          }}
-        >
-          <Outlet />
-        </main>
-      </div>
+      {/* Main Content */}
+      <main className="flex-1">
+        <Outlet />
+      </main>
+
+      {/* Dialog de Ayuda */}
+      <AlertDialog open={showHelpDialog} onOpenChange={setShowHelpDialog}>
+        <AlertDialogContent className="bg-[#161A15] border-[#161A15]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white flex items-center gap-2">
+              <HelpCircle className="h-5 w-5" />
+              Ayuda y Soporte
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">
+              Para cualquier ayuda o soporte técnico, por favor contacta a nuestro equipo de
+              operaciones:
+              <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <p className="text-blue-300 font-medium">
+                  📧 operaciones@bukz.co
+                </p>
+              </div>
+              <p className="mt-3 text-sm text-gray-400">
+                Nuestro equipo responderá a tu solicitud lo antes posible.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setShowHelpDialog(false)}
+              className="bg-accent hover:bg-accent/90"
+            >
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

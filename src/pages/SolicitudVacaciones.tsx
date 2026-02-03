@@ -103,7 +103,7 @@ const SolicitudVacaciones = () => {
 
       // Volver después de 2 segundos
       setTimeout(() => {
-        navigate("/librerias/vacaciones-permisos");
+        navigate("/solicitudes");
       }, 2000);
 
     } catch (error) {
@@ -119,34 +119,25 @@ const SolicitudVacaciones = () => {
   };
 
   return (
-    <>
-      {/* Header */}
-      <header className="border-b border-border bg-primary px-8 py-6">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/librerias/vacaciones-permisos")}
-            className="text-foreground hover:bg-foreground/10"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Solicitud de Vacaciones</h1>
-            <p className="text-sm text-foreground/80">
-              Completa el formulario para solicitar tus vacaciones
-            </p>
+    <div className="p-8 max-w-4xl mx-auto">
+      <Card className="bg-[#161A15] border-[#161A15]">
+        <CardHeader>
+          <div className="flex items-center gap-4 mb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/solicitudes")}
+              className="text-gray-300 hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver
+            </Button>
           </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <div className="p-8 max-w-4xl mx-auto">
-        <Card className="bg-[#161A15] border-[#161A15]">
-          <CardHeader>
-            <CardTitle className="text-white">Información del Solicitante</CardTitle>
-          </CardHeader>
+          <CardTitle className="text-white text-2xl">Solicitud de Vacaciones</CardTitle>
+          <p className="text-gray-400 text-sm mt-2">
+            Completa el formulario para solicitar tus vacaciones
+          </p>
+        </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Datos Personales */}
@@ -255,6 +246,7 @@ const SolicitudVacaciones = () => {
                           onSelect={setFechaInicio}
                           locale={es}
                           initialFocus
+                          weekStartsOn={1}
                         />
                       </PopoverContent>
                     </Popover>
@@ -284,6 +276,7 @@ const SolicitudVacaciones = () => {
                           locale={es}
                           disabled={(date) => fechaInicio ? date < fechaInicio : false}
                           initialFocus
+                          weekStartsOn={1}
                         />
                       </PopoverContent>
                     </Popover>
@@ -313,6 +306,7 @@ const SolicitudVacaciones = () => {
                           locale={es}
                           disabled={(date) => fechaFin ? date <= fechaFin : false}
                           initialFocus
+                          weekStartsOn={1}
                         />
                       </PopoverContent>
                     </Popover>
@@ -325,7 +319,7 @@ const SolicitudVacaciones = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate("/librerias/vacaciones-permisos")}
+                  onClick={() => navigate("/solicitudes")}
                   className="flex-1"
                   disabled={isLoading}
                 >
@@ -353,7 +347,6 @@ const SolicitudVacaciones = () => {
           </CardContent>
         </Card>
       </div>
-    </>
   );
 };
 
