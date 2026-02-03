@@ -113,36 +113,27 @@ const SolicitudCumpleanos = () => {
   };
 
   return (
-    <>
-      {/* Header */}
-      <header className="border-b border-border bg-primary px-8 py-6">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/solicitudes")}
-            className="text-foreground hover:bg-foreground/10"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">Solicitud de Día de Cumpleaños</h1>
-            <p className="text-sm text-foreground/80">
-              Completa el formulario para solicitar tu día de cumpleaños
-            </p>
+    <div className="p-6 max-w-5xl mx-auto">
+      <Card className="bg-[#161A15] border-[#161A15]">
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-4 mb-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/solicitudes")}
+              className="text-gray-300 hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver
+            </Button>
           </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <div className="p-6 max-w-5xl mx-auto">
-        <Card className="bg-[#161A15] border-[#161A15]">
-          <CardHeader>
-            <CardTitle className="text-white">Información del Solicitante</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-5">
+          <CardTitle className="text-white text-xl">Solicitud de Día de Cumpleaños</CardTitle>
+          <p className="text-gray-400 text-sm mt-1">
+            Completa el formulario para solicitar tu día de cumpleaños
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-5">
               {/* Datos Personales */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
