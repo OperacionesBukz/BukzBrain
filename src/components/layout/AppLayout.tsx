@@ -11,14 +11,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const AppLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [username, setUsername] = useState("");
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
     // Obtener el usuario del localStorage
@@ -45,150 +44,130 @@ const AppLayout = () => {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="border-b border-border bg-primary sticky top-0 z-50">
-        <div className="px-4 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo y menú mobile */}
-            <div className="flex items-center gap-4">
-              {/* Menú hamburguesa para móvil */}
-              <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-                <SheetTrigger asChild className="lg:hidden">
-                  <Button variant="ghost" size="icon" className="text-foreground">
-                    <MenuIcon className="h-6 w-6" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-64 bg-primary">
-                  <nav className="flex flex-col gap-2 mt-8">
-                    {menuItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.path}
-                          onClick={() => {
-                            navigate(item.path);
-                            setIsMobileMenuOpen(false);
-                          }}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                            isActive(item.path)
-                              ? "bg-foreground/10 text-foreground"
-                              : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground"
-                          }`}
-                        >
-                          <Icon className="h-5 w-5" />
-                          <span className="font-medium">{item.label}</span>
-                        </button>
-                      );
-                    })}
-                  </nav>
-                </SheetContent>
-              </Sheet>
-
-              {/* Logo - clickeable para ir a home */}
-              <button
-                onClick={() => navigate("/")}
-                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-              >
-                <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-                  <span className="text-accent-foreground font-bold text-lg">B</span>
-                </div>
-                <span className="text-xl font-bold text-foreground hidden sm:block">
-                  BukzBrain
-                </span>
-              </button>
+    <div className="min-h-screen bg-background flex">
+      {/* Sidebar */}
+      <aside
+        className={`${
+          isSidebarOpen ? "w-64" : "w-20"
+        } bg-sidebar border-r border-border transition-all duration-300 flex flex-col`}
+      >
+        {/* Logo - clickeable para ir a home */}
+        <div className="p-6 border-b border-border">
+          <button
+            onClick={() => navigate("/")}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity w-full"
+          >
+            <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-accent-foreground font-bold text-xl">B</span>
             </div>
-
-            {/* Menú desktop */}
-            <nav className="hidden lg:flex items-center gap-2">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => navigate(item.path)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                      isActive(item.path)
-                        ? "bg-foreground/10 text-foreground"
-                        : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="font-medium">{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            {/* Usuario y acciones */}
-            <div className="flex items-center gap-2">
-              {/* Botón de Ayuda */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowHelpDialog(true)}
-                className="text-foreground hover:bg-foreground/10"
-                title="Ayuda y Soporte"
-              >
-                <HelpCircle className="h-5 w-5" />
-              </Button>
-
-              {/* Usuario */}
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-foreground/10 rounded-lg">
-                <div className="w-6 h-6 bg-accent rounded-full flex items-center justify-center">
-                  <span className="text-accent-foreground text-xs font-semibold">
-                    {username.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <span className="text-sm font-medium text-foreground">{username}</span>
-              </div>
-
-              {/* Logout */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleLogout}
-                className="text-foreground hover:bg-foreground/10"
-                title="Cerrar sesión"
-              >
-                <LogOut className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
+            {isSidebarOpen && (
+              <span className="text-xl font-bold text-sidebar-foreground">BukzBrain</span>
+            )}
+          </button>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="flex-1">
-        <Outlet />
-      </main>
+        {/* Menu Items */}
+        <nav className="flex-1 p-4 space-y-2">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
+            return (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  active
+                    ? "bg-accent text-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                }`}
+                title={!isSidebarOpen ? item.label : undefined}
+              >
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                {isSidebarOpen && <span className="font-medium">{item.label}</span>}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Toggle Sidebar */}
+        <div className="p-4 border-t border-border">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="w-full justify-center"
+          >
+            <MenuIcon className="h-5 w-5" />
+          </Button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-end gap-4">
+          {/* Botón de Ayuda */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowHelpDialog(true)}
+            className="text-muted-foreground hover:text-foreground"
+            title="Ayuda y Soporte"
+          >
+            <HelpCircle className="h-5 w-5" />
+          </Button>
+
+          {/* Usuario */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-accent/10 rounded-lg">
+            <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center">
+              <span className="text-accent-foreground text-sm font-semibold">
+                {username.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <span className="text-sm font-medium text-foreground">{username}</span>
+          </div>
+
+          {/* Logout */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            className="text-muted-foreground hover:text-foreground"
+            title="Cerrar sesión"
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
 
       {/* Dialog de Ayuda */}
       <AlertDialog open={showHelpDialog} onOpenChange={setShowHelpDialog}>
-        <AlertDialogContent className="bg-[#161A15] border-[#161A15]">
+        <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white flex items-center gap-2">
+            <AlertDialogTitle className="flex items-center gap-2">
               <HelpCircle className="h-5 w-5" />
               Ayuda y Soporte
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300">
+            <AlertDialogDescription>
               Para cualquier ayuda o soporte técnico, por favor contacta a nuestro equipo de
               operaciones:
-              <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                <p className="text-blue-300 font-medium">
+              <div className="mt-4 p-3 bg-accent/10 border border-accent/20 rounded-lg">
+                <p className="text-accent font-medium">
                   📧 operaciones@bukz.co
                 </p>
               </div>
-              <p className="mt-3 text-sm text-gray-400">
+              <p className="mt-3 text-sm text-muted-foreground">
                 Nuestro equipo responderá a tu solicitud lo antes posible.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={() => setShowHelpDialog(false)}
-              className="bg-accent hover:bg-accent/90"
-            >
+            <AlertDialogAction onClick={() => setShowHelpDialog(false)}>
               Entendido
             </AlertDialogAction>
           </AlertDialogFooter>
