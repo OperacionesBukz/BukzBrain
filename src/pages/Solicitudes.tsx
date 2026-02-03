@@ -12,7 +12,8 @@ const Solicitudes = () => {
       title: "Solicitud de Vacaciones",
       description: "Solicita tus vacaciones anuales",
       icon: Calendar,
-      color: "bg-blue-500",
+      color: "bg-[#F7DC6F]", // Amarillo Bukz
+      iconColor: "text-black", // Icono negro
       route: "/solicitudes/vacaciones"
     },
     {
@@ -20,7 +21,8 @@ const Solicitudes = () => {
       title: "Permiso Remunerado",
       description: "Solicita un permiso con goce de salario",
       icon: UserCheck,
-      color: "bg-green-500",
+      color: "bg-sidebar", // Gris del menú
+      iconColor: "text-foreground", // Icono en color del texto
       route: "/solicitudes/permiso-remunerado",
       disabled: true
     },
@@ -29,7 +31,8 @@ const Solicitudes = () => {
       title: "Permiso No Remunerado",
       description: "Solicita un permiso sin goce de salario",
       icon: Clock,
-      color: "bg-orange-500",
+      color: "bg-sidebar", // Gris del menú
+      iconColor: "text-foreground",
       route: "/solicitudes/permiso-no-remunerado",
       disabled: true
     },
@@ -38,7 +41,8 @@ const Solicitudes = () => {
       title: "Día de Cumpleaños",
       description: "Solicita tu día de cumpleaños",
       icon: Gift,
-      color: "bg-purple-500",
+      color: "bg-[#F7DC6F]", // Amarillo Bukz
+      iconColor: "text-black", // Icono negro
       route: "/solicitudes/cumpleanos"
     }
   ];
@@ -86,7 +90,7 @@ const Solicitudes = () => {
               <CardHeader>
                 <div className="flex items-start gap-4">
                   <div className={`p-3 rounded-lg ${solicitud.color}`}>
-                    <Icon className="h-6 w-6 text-white" />
+                    <Icon className={`h-6 w-6 ${solicitud.iconColor}`} />
                   </div>
                   <div className="flex-1">
                     <CardTitle className="text-white flex items-center gap-2">
@@ -131,9 +135,9 @@ const Solicitudes = () => {
       </div>
 
       {/* Nota Importante */}
-      <Card className="mt-6 bg-blue-500/10 border-blue-500/20">
+      <Card className="mt-6 bg-[#F7DC6F]/10 border-[#F7DC6F]/30">
         <CardContent className="pt-6">
-          <p className="text-sm text-blue-300">
+          <p className="text-sm text-foreground">
             <strong>Nota:</strong> Todas las solicitudes deben contar con la aprobación de tu jefe inmediato.
             Una vez enviada la solicitud, recibirás confirmación por correo electrónico.
           </p>
