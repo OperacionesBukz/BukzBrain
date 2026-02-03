@@ -97,7 +97,7 @@ const SolicitudCumpleanos = () => {
 
       // Volver después de 2 segundos
       setTimeout(() => {
-        navigate("/librerias/vacaciones-permisos");
+        navigate("/solicitudes");
       }, 2000);
 
     } catch (error) {
@@ -120,7 +120,7 @@ const SolicitudCumpleanos = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate("/librerias/vacaciones-permisos")}
+            onClick={() => navigate("/solicitudes")}
             className="text-foreground hover:bg-foreground/10"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -248,6 +248,7 @@ const SolicitudCumpleanos = () => {
                           onSelect={setFecha}
                           locale={es}
                           initialFocus
+                          weekStartsOn={1}
                         />
                       </PopoverContent>
                     </Popover>
@@ -271,7 +272,7 @@ const SolicitudCumpleanos = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate("/librerias/vacaciones-permisos")}
+                  onClick={() => navigate("/solicitudes")}
                   className="flex-1"
                   disabled={isLoading}
                 >
