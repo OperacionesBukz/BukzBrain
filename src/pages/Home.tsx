@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Library, ClipboardList } from "lucide-react";
+import { Library, ClipboardList, FileText } from "lucide-react";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -19,11 +19,18 @@ const Home = () => {
       icon: Library,
       path: "/librerias",
     },
+    {
+      id: "solicitudes",
+      title: "Solicitudes",
+      description: "Gestiona tus solicitudes de vacaciones, permisos y días especiales",
+      icon: FileText,
+      path: "/solicitudes",
+    },
   ];
 
   return (
     <div className="flex-1 flex items-center justify-center p-8 bg-gray-50">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
         {modules.map((module) => {
           const Icon = module.icon;
           
