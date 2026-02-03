@@ -48,23 +48,23 @@ const Solicitudes = () => {
   ];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-foreground mb-1">
           Sistema de Solicitudes
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Gestiona tus solicitudes de vacaciones, permisos y días especiales
         </p>
       </div>
 
       {/* Información General */}
-      <Card className="mb-6 bg-[#161A15] border-[#161A15]">
-        <CardHeader>
-          <CardTitle className="text-white">Información General</CardTitle>
+      <Card className="mb-5 bg-[#161A15] border-[#161A15]">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base text-white">Información General</CardTitle>
         </CardHeader>
-        <CardContent className="text-gray-300 space-y-3">
+        <CardContent className="text-gray-300 text-sm">
           <p>
             Este sistema te permite gestionar tus solicitudes de vacaciones, permisos y días especiales
             de forma rápida y digital. Completa el formulario correspondiente y se enviará automáticamente
@@ -74,7 +74,7 @@ const Solicitudes = () => {
       </Card>
 
       {/* Grid de Solicitudes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {solicitudes.map((solicitud) => {
           const Icon = solicitud.icon;
           return (
@@ -87,31 +87,31 @@ const Solicitudes = () => {
               }`}
               onClick={() => !solicitud.disabled && navigate(solicitud.route)}
             >
-              <CardHeader>
-                <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-lg ${solicitud.color}`}>
-                    <Icon className={`h-6 w-6 ${solicitud.iconColor}`} />
+              <CardHeader className="pb-3">
+                <div className="flex items-start gap-3">
+                  <div className={`p-2.5 rounded-lg ${solicitud.color}`}>
+                    <Icon className={`h-5 w-5 ${solicitud.iconColor}`} />
                   </div>
                   <div className="flex-1">
-                    <CardTitle className="text-white flex items-center gap-2">
+                    <CardTitle className="text-white flex items-center gap-2 text-base">
                       {solicitud.title}
                       {solicitud.disabled && (
-                        <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
+                        <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded">
                           Próximamente
                         </span>
                       )}
                     </CardTitle>
-                    <CardDescription className="text-gray-400 mt-2">
+                    <CardDescription className="text-gray-400 mt-1 text-sm">
                       {solicitud.description}
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-0">
                 {!solicitud.disabled ? (
                   <Button 
                     variant="default" 
-                    className="w-full"
+                    className="w-full h-9 text-sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate(solicitud.route);
@@ -122,7 +122,7 @@ const Solicitudes = () => {
                 ) : (
                   <Button 
                     variant="secondary" 
-                    className="w-full" 
+                    className="w-full h-9 text-sm" 
                     disabled
                   >
                     Disponible Pronto
@@ -135,9 +135,9 @@ const Solicitudes = () => {
       </div>
 
       {/* Nota Importante */}
-      <Card className="mt-6 bg-[#F7DC6F]/10 border-[#F7DC6F]/30">
-        <CardContent className="pt-6">
-          <p className="text-sm text-foreground">
+      <Card className="mt-5 bg-[#F7DC6F]/10 border-[#F7DC6F]/30">
+        <CardContent className="py-4">
+          <p className="text-xs text-foreground">
             <strong>Nota:</strong> Todas las solicitudes deben contar con la aprobación de tu jefe inmediato.
             Una vez enviada la solicitud, recibirás confirmación por correo electrónico.
           </p>
