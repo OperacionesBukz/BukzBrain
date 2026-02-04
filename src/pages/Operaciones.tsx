@@ -1,11 +1,14 @@
 import { DocumentLibrary } from "@/components/documents/DocumentLibrary";
+import TaskManager from "@/components/tasks/TaskManager";
 
 const Operaciones = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="p-8">
-        <DocumentLibrary section="operaciones" />
-      </div>
+    <div className="p-8">
+      {/* Task Manager */}
+      <TaskManager />
+      
+      {/* Document Library */}
+      <DocumentLibrary section="operaciones" />
     </div>
   );
 };
