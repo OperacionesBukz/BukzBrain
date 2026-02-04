@@ -91,12 +91,7 @@ const Login = () => {
               className="h-16 w-auto object-contain"
             />
           </div>
-          <CardTitle className="text-2xl font-bold text-center text-white">
-            BukzBrain
-          </CardTitle>
-          <CardDescription className="text-center text-gray-400">
-            Ingresa tus credenciales para acceder
-          </CardDescription>
+          
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
