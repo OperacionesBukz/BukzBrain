@@ -25,6 +25,7 @@ interface Task {
 const TaskManager = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
+  const [showAddTask, setShowAddTask] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
   const [currentUser, setCurrentUser] = useState("");
   const { toast } = useToast();
@@ -74,11 +75,7 @@ const TaskManager = () => {
     const updatedTasks = [...tasks, newTask];
     saveTasks(updatedTasks);
     setNewTaskText("");
-
-    toast({
-      title: "Tarea creada",
-      description: "La tarea ha sido agregada exitosamente"
-    });
+    setShowAddTask(false);
   };
 
   // Agregar subtarea
@@ -112,11 +109,6 @@ const TaskManager = () => {
 
     saveTasks(updatedTasks);
     setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
-
-    toast({
-      title: "Subtarea agregada",
-      description: "La subtarea ha sido creada exitosamente"
-    });
   };
 
   // Toggle completar tarea principal
@@ -124,7 +116,6 @@ const TaskManager = () => {
     const updatedTasks = tasks.map(task => {
       if (task.id === taskId) {
         const newCompleted = !task.completed;
-        // Si se marca la tarea, marcar todas las subtareas
         return {
           ...task,
           completed: newCompleted,
@@ -143,7 +134,6 @@ const TaskManager = () => {
         const updatedSubtasks = task.subtasks.map(st =>
           st.id === subtaskId ? { ...st, completed: !st.completed } : st
         );
-        // Si todas las subtareas están completas, marcar la tarea principal
         const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
         return {
           ...task,
@@ -160,10 +150,6 @@ const TaskManager = () => {
   const deleteTask = (taskId: string) => {
     const updatedTasks = tasks.filter(task => task.id !== taskId);
     saveTasks(updatedTasks);
-    toast({
-      title: "Tarea eliminada",
-      description: "La tarea ha sido eliminada correctamente"
-    });
   };
 
   // Eliminar subtarea
@@ -188,139 +174,200 @@ const TaskManager = () => {
     saveTasks(updatedTasks);
   };
 
+  // Calcular progreso de subtareas
+  const getSubtaskProgress = (task: Task) => {
+    if (task.subtasks.length === 0) return null;
+    const completed = task.subtasks.filter(st => st.completed).length;
+    const total = task.subtasks.length;
+    const percentage = Math.round((completed / total) * 100);
+    return { completed, total, percentage };
+  };
+
   // Filtrar tareas
   const pendingTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
 
   // Renderizar una tarea
-  const renderTask = (task: Task) => (
-    <div
-      key={task.id}
-      className={`border rounded-lg p-3 transition-all ${
-        task.completed 
-          ? "bg-green-900/20 border-green-600" 
-          : "bg-gray-800 border-gray-600"
-      }`}
-    >
-      {/* Tarea principal */}
-      <div className="flex items-start gap-3">
-        <Checkbox
-          checked={task.completed}
-          onCheckedChange={() => toggleTaskComplete(task.id)}
-          className="mt-1"
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className={`text-white ${task.completed ? "font-semibold" : ""}`}>
-              {task.text}
-            </p>
-            {task.completed && (
-              <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0" />
-            )}
-          </div>
-          <p className="text-xs text-gray-400 mt-1">
-            Por: {task.createdBy} • {new Date(task.createdAt).toLocaleDateString()}
-          </p>
-        </div>
-        <div className="flex gap-1 flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleExpanded(task.id)}
-            className="h-8 w-8 p-0 text-gray-400 hover:text-white"
-            title={task.expanded ? "Colapsar" : "Expandir para agregar subtareas"}
-          >
-            {task.expanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => deleteTask(task.id)}
-            className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
-            title="Eliminar tarea"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Subtareas */}
-      {task.expanded && (
-        <div className="ml-8 mt-3 space-y-2">
-          {/* Lista de subtareas */}
-          {task.subtasks.map(subtask => (
-            <div key={subtask.id} className="flex items-center gap-2">
-              <Checkbox
-                checked={subtask.completed}
-                onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
-                className="h-4 w-4"
-              />
-              <p className={`text-sm flex-1 ${subtask.completed ? "text-green-400 font-medium" : "text-gray-300"}`}>
-                {subtask.text}
+  const renderTask = (task: Task) => {
+    const progress = getSubtaskProgress(task);
+    
+    return (
+      <div
+        key={task.id}
+        className={`border rounded-lg p-3 transition-all ${
+          task.completed 
+            ? "bg-green-900/20 border-green-600" 
+            : "bg-gray-800 border-gray-600"
+        }`}
+      >
+        {/* Tarea principal */}
+        <div className="flex items-start gap-3">
+          <Checkbox
+            checked={task.completed}
+            onCheckedChange={() => toggleTaskComplete(task.id)}
+            className="mt-1"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className={`text-white ${task.completed ? "font-semibold" : ""}`}>
+                {task.text}
               </p>
-              {subtask.completed && (
-                <CheckCircle2 className="h-3 w-3 text-green-400" />
+              {task.completed && (
+                <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0" />
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => deleteSubtask(task.id, subtask.id)}
-                className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
             </div>
-          ))}
-
-          {/* Agregar subtarea */}
-          <div className="flex gap-2 mt-2 pt-2 border-t border-gray-700">
-            <Input
-              placeholder="Agregar subtarea..."
-              value={newSubtaskText[task.id] || ""}
-              onChange={(e) =>
-                setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
-              }
-              onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
-              className="bg-white text-sm h-8"
-            />
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-xs text-gray-400">
+                Por: {task.createdBy} • {new Date(task.createdAt).toLocaleDateString()}
+              </p>
+              {/* Mostrar progreso de subtareas si está colapsado y tiene subtareas */}
+              {!task.expanded && progress && (
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#F7DC6F] transition-all duration-300"
+                      style={{ width: `${progress.percentage}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {progress.completed}/{progress.total}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-1 flex-shrink-0">
             <Button
-              onClick={() => addSubtask(task.id)}
+              variant="ghost"
               size="sm"
-              className="h-8 text-xs flex-shrink-0"
+              onClick={() => toggleExpanded(task.id)}
+              className="h-8 w-8 p-0 text-gray-400 hover:text-white"
+              title={task.expanded ? "Colapsar" : "Expandir para ver/agregar subtareas"}
             >
-              <Plus className="h-3 w-3 mr-1" />
-              Agregar
+              {task.expanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => deleteTask(task.id)}
+              className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+              title="Eliminar tarea"
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Subtareas */}
+        {task.expanded && (
+          <div className="ml-8 mt-3 space-y-2">
+            {/* Lista de subtareas */}
+            {task.subtasks.map(subtask => (
+              <div key={subtask.id} className="flex items-center gap-2">
+                <Checkbox
+                  checked={subtask.completed}
+                  onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
+                  className="h-4 w-4"
+                />
+                <p className={`text-sm flex-1 ${subtask.completed ? "text-green-400 font-medium" : "text-gray-300"}`}>
+                  {subtask.text}
+                </p>
+                {subtask.completed && (
+                  <CheckCircle2 className="h-3 w-3 text-green-400" />
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => deleteSubtask(task.id, subtask.id)}
+                  className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+
+            {/* Agregar subtarea */}
+            <div className="flex gap-2 mt-2 pt-2 border-t border-gray-700">
+              <Input
+                placeholder="Agregar subtarea..."
+                value={newSubtaskText[task.id] || ""}
+                onChange={(e) =>
+                  setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
+                }
+                onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
+                className="bg-white text-sm h-8"
+              />
+              <Button
+                onClick={() => addSubtask(task.id)}
+                size="sm"
+                className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Agregar
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Card className="mb-6 bg-[#161A15] border-[#161A15]">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-white">Tareas Activas</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Agregar nueva tarea */}
-        <div className="flex gap-2">
-          <Input
-            placeholder="Nueva tarea (ej: Devolución proveedor X)"
-            value={newTaskText}
-            onChange={(e) => setNewTaskText(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && addTask()}
-            className="bg-white flex-1"
-          />
-          <Button onClick={addTask} className="flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black">
+        
+        {/* Botón de agregar sutil en la esquina */}
+        {!showAddTask ? (
+          <Button 
+            onClick={() => setShowAddTask(true)}
+            size="sm"
+            variant="ghost"
+            className="text-gray-400 hover:text-white hover:bg-gray-800"
+          >
             <Plus className="h-4 w-4 mr-1" />
-            Agregar
+            Nueva tarea
           </Button>
-        </div>
+        ) : null}
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        {/* Campo de agregar tarea (aparece solo cuando se hace click) */}
+        {showAddTask && (
+          <div className="flex gap-2 pb-4 border-b border-gray-700">
+            <Input
+              placeholder="Escribe la nueva tarea..."
+              value={newTaskText}
+              onChange={(e) => setNewTaskText(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && addTask()}
+              className="bg-white flex-1"
+              autoFocus
+            />
+            <Button 
+              onClick={addTask} 
+              size="sm"
+              className="flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Crear
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowAddTask(false);
+                setNewTaskText("");
+              }}
+              size="sm"
+              variant="ghost"
+              className="flex-shrink-0"
+            >
+              Cancelar
+            </Button>
+          </div>
+        )}
 
         {/* Dos columnas: Pendientes y Completadas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -331,14 +378,14 @@ const TaskManager = () => {
                 Pendientes
               </h3>
               <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
-                {pendingTasks.length} {pendingTasks.length === 1 ? "tarea" : "tareas"}
+                {pendingTasks.length}
               </span>
             </div>
             <div className="space-y-3">
               {pendingTasks.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
                   <p>¡No hay tareas pendientes!</p>
-                  <p className="text-xs mt-1">Agrega una nueva tarea arriba</p>
+                  <p className="text-xs mt-1">Agrega una nueva tarea</p>
                 </div>
               ) : (
                 pendingTasks.map(renderTask)
@@ -353,14 +400,13 @@ const TaskManager = () => {
                 Completadas
               </h3>
               <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">
-                {completedTasks.length} {completedTasks.length === 1 ? "tarea" : "tareas"}
+                {completedTasks.length}
               </span>
             </div>
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
                   <p>Aún no hay tareas completadas</p>
-                  <p className="text-xs mt-1">Marca las tareas pendientes cuando las termines</p>
                 </div>
               ) : (
                 completedTasks.map(renderTask)
@@ -372,8 +418,8 @@ const TaskManager = () => {
         {/* Nota informativa */}
         <div className="pt-4 border-t border-gray-700">
           <p className="text-xs text-gray-500">
-            💡 <strong>Instrucciones:</strong> Click en la flecha (→) para expandir y agregar subtareas. 
-            Las tareas se mueven automáticamente entre columnas al marcarlas como completadas.
+            💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
+            La barra amarilla muestra el progreso de subtareas completadas.
           </p>
         </div>
       </CardContent>
