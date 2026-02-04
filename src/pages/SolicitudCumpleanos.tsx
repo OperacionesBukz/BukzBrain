@@ -175,14 +175,14 @@ const SolicitudCumpleanos = () => {
                     name="cargo"
                     value={formData.cargo}
                     onChange={handleInputChange}
-                    placeholder="Ej: Analista"
+                    placeholder="Ej: Analista/Librero"
                     className="bg-white"
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="sede" className="text-gray-300">
+                  <Label htmlFor="sede bukz" className="text-gray-300">
                     Sede *
                   </Label>
                   <Input
