@@ -2,15 +2,14 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>BukzBocs</title>
-    <script>
-      // GitHub Pages hack para manejar SPA routing
+    <title>BukzBrain</title>
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages
       // https://github.com/rafgraph/spa-github-pages
-      // Este script toma la URL actual, la convierte en query parameter
-      // y redirige al index.html para que el router de React pueda manejarla
+      // Copyright (c) 2016 Rafael Pedicini, licensed under the MIT License
       
-      var pathSegmentsToKeep = 1; // Para /BukzBrain/
-      
+      var pathSegmentsToKeep = 1;
+
       var l = window.location;
       l.replace(
         l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
@@ -19,6 +18,7 @@
         (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
         l.hash
       );
+
     </script>
   </head>
   <body>
