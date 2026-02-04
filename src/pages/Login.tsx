@@ -51,10 +51,14 @@ const Login = () => {
         // Guardar en localStorage
         localStorage.setItem("isAuthenticated", "true");
         localStorage.setItem("userRole", data.role || "employee");
-        localStorage.setItem("username", data.username); // Guardar username
+        localStorage.setItem("username", data.username);
         
         console.log("Login exitoso, redirigiendo...");
-        navigate("/");
+        
+        // SOLUCIÓN DEFINITIVA: Usar window.location para forzar navegación
+        const baseUrl = window.location.origin;
+        const basePath = '/BukzBrain';
+        window.location.href = baseUrl + basePath + '/';
       } else {
         setError("Usuario o contraseña incorrectos");
       }
@@ -77,7 +81,12 @@ const Login = () => {
               className="h-16 w-auto object-contain"
             />
           </div>
-          
+          <CardTitle className="text-2xl font-bold text-center text-white">
+            BukzBrain
+          </CardTitle>
+          <CardDescription className="text-center text-gray-400">
+            Ingresa tus credenciales para acceder
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -132,7 +141,7 @@ const Login = () => {
             )}
             <Button
               type="submit"
-              className="w-full bg-accent hover:bg-accent/90"
+              className="w-full bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black font-semibold"
               disabled={isLoading}
             >
               {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
