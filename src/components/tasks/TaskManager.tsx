@@ -36,6 +36,30 @@ const TaskManager = () => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
     loadTasks();
+
+    // Configurar Realtime para actualizaciones en vivo
+    const channel = supabase
+      .channel('tasks-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Escuchar todos los eventos: INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'tasks'
+        },
+        (payload) => {
+          console.log('🔄 Cambio detectado:', payload);
+          
+          // Recargar tareas cuando hay cambios
+          loadTasks();
+        }
+      )
+      .subscribe();
+
+    // Cleanup: desuscribirse cuando el componente se desmonte
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Cargar tareas desde Supabase
@@ -93,7 +117,7 @@ const TaskManager = () => {
         return;
       }
 
-      await loadTasks();
+      // No necesitas loadTasks() aquí - Realtime lo hará automáticamente
       setNewTaskText("");
       setShowAddTask(false);
     } catch (err) {
@@ -135,7 +159,7 @@ const TaskManager = () => {
         return;
       }
 
-      await loadTasks();
+      // No necesitas loadTasks() aquí - Realtime lo hará
       setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
     } catch (err) {
       console.error("Error:", err);
@@ -164,7 +188,7 @@ const TaskManager = () => {
         return;
       }
 
-      await loadTasks();
+      // Realtime actualizará automáticamente
     } catch (err) {
       console.error("Error:", err);
     }
@@ -195,7 +219,7 @@ const TaskManager = () => {
         return;
       }
 
-      await loadTasks();
+      // Realtime actualizará automáticamente
     } catch (err) {
       console.error("Error:", err);
     }
@@ -214,7 +238,7 @@ const TaskManager = () => {
         return;
       }
 
-      await loadTasks();
+      // Realtime actualizará automáticamente
     } catch (err) {
       console.error("Error:", err);
     }
@@ -238,7 +262,7 @@ const TaskManager = () => {
         return;
       }
 
-      await loadTasks();
+      // Realtime actualizará automáticamente
     } catch (err) {
       console.error("Error:", err);
     }
@@ -497,6 +521,7 @@ const TaskManager = () => {
           <p className="text-xs text-gray-500">
             💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
             La barra amarilla muestra el progreso de subtareas completadas.
+            <span className="ml-2 text-green-400">🔄 Actualizaciones en tiempo real activadas</span>
           </p>
         </div>
       </CardContent>
