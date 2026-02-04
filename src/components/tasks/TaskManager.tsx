@@ -29,40 +29,31 @@ const TaskManager = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
   const [currentUser, setCurrentUser] = useState("");
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  // Cargar usuario actual y tareas al montar
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
     loadTasks();
 
-    // Configurar Realtime para actualizaciones en vivo
     const channel = supabase
       .channel('tasks-changes')
       .on(
         'postgres_changes',
-        {
-          event: '*', // Escuchar todos los eventos: INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'tasks'
-        },
-        (payload) => {
-          console.log('🔄 Cambio detectado:', payload);
-          
-          // Recargar tareas cuando hay cambios
+        { event: '*', schema: 'public', table: 'tasks' },
+        () => {
+          console.log('🔄 Actualización detectada');
           loadTasks();
         }
       )
       .subscribe();
 
-    // Cleanup: desuscribirse cuando el componente se desmonte
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  // Cargar tareas desde Supabase
   const loadTasks = async () => {
     try {
       const { data, error } = await supabase
@@ -71,14 +62,14 @@ const TaskManager = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error("Error cargando tareas:", error);
+        console.error("Error:", error);
         return;
       }
 
       const parsedTasks = (data || []).map(task => ({
         ...task,
         subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
-        expanded: false
+        expanded: expandedTaskIds.has(task.id) // Mantener estado expandido
       }));
 
       setTasks(parsedTasks);
@@ -87,7 +78,6 @@ const TaskManager = () => {
     }
   };
 
-  // Agregar nueva tarea principal
   const addTask = async () => {
     if (!newTaskText.trim()) {
       toast({
@@ -108,16 +98,7 @@ const TaskManager = () => {
     };
 
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .insert([newTask]);
-
-      if (error) {
-        console.error("Error creando tarea:", error);
-        return;
-      }
-
-      // No necesitas loadTasks() aquí - Realtime lo hará automáticamente
+      await supabase.from('tasks').insert([newTask]);
       setNewTaskText("");
       setShowAddTask(false);
     } catch (err) {
@@ -125,7 +106,6 @@ const TaskManager = () => {
     }
   };
 
-  // Agregar subtarea
   const addSubtask = async (taskId: string) => {
     const subtaskText = newSubtaskText[taskId]?.trim();
     if (!subtaskText) {
@@ -146,27 +126,18 @@ const TaskManager = () => {
       completed: false
     };
 
-    const updatedSubtasks = [...task.subtasks, newSubtask];
-
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
-        .update({ subtasks: updatedSubtasks })
+        .update({ subtasks: [...task.subtasks, newSubtask] })
         .eq('id', taskId);
 
-      if (error) {
-        console.error("Error:", error);
-        return;
-      }
-
-      // No necesitas loadTasks() aquí - Realtime lo hará
       setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
-  // Toggle completar tarea principal
   const toggleTaskComplete = async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -175,26 +146,15 @@ const TaskManager = () => {
     const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
-        .update({ 
-          completed: newCompleted,
-          subtasks: updatedSubtasks
-        })
+        .update({ completed: newCompleted, subtasks: updatedSubtasks })
         .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-        return;
-      }
-
-      // Realtime actualizará automáticamente
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
-  // Toggle completar subtarea
   const toggleSubtaskComplete = async (taskId: string, subtaskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -206,76 +166,53 @@ const TaskManager = () => {
     const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
-        .update({ 
-          subtasks: updatedSubtasks,
-          completed: allSubtasksComplete
-        })
+        .update({ subtasks: updatedSubtasks, completed: allSubtasksComplete })
         .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-        return;
-      }
-
-      // Realtime actualizará automáticamente
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
-  // Eliminar tarea
   const deleteTask = async (taskId: string) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-        return;
-      }
-
-      // Realtime actualizará automáticamente
+      await supabase.from('tasks').delete().eq('id', taskId);
+      expandedTaskIds.delete(taskId);
+      setExpandedTaskIds(new Set(expandedTaskIds));
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
-  // Eliminar subtarea
   const deleteSubtask = async (taskId: string, subtaskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
-
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
-        .update({ subtasks: updatedSubtasks })
+        .update({ subtasks: task.subtasks.filter(st => st.id !== subtaskId) })
         .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-        return;
-      }
-
-      // Realtime actualizará automáticamente
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
-  // Toggle expandir/colapsar tarea (solo local, no guardar en DB)
   const toggleExpanded = (taskId: string) => {
+    const newExpanded = new Set(expandedTaskIds);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
+    }
+    setExpandedTaskIds(newExpanded);
+    
     setTasks(tasks.map(task =>
       task.id === taskId ? { ...task, expanded: !task.expanded } : task
     ));
   };
 
-  // Calcular progreso de subtareas
   const getSubtaskProgress = (task: Task) => {
     if (task.subtasks.length === 0) return null;
     const completed = task.subtasks.filter(st => st.completed).length;
@@ -284,11 +221,9 @@ const TaskManager = () => {
     return { completed, total, percentage };
   };
 
-  // Filtrar tareas
   const pendingTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
 
-  // Renderizar una tarea
   const renderTask = (task: Task) => {
     const progress = getSubtaskProgress(task);
     
@@ -301,7 +236,6 @@ const TaskManager = () => {
             : "bg-gray-800 border-gray-600"
         }`}
       >
-        {/* Tarea principal */}
         <div className="flex items-start gap-3">
           <Checkbox
             checked={task.completed}
@@ -321,7 +255,6 @@ const TaskManager = () => {
               <p className="text-xs text-gray-400">
                 Por: {task.created_by} • {new Date(task.created_at).toLocaleDateString()}
               </p>
-              {/* Mostrar progreso de subtareas si está colapsado y tiene subtareas */}
               {!task.expanded && progress && (
                 <div className="flex items-center gap-2">
                   <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -343,30 +276,22 @@ const TaskManager = () => {
               size="sm"
               onClick={() => toggleExpanded(task.id)}
               className="h-8 w-8 p-0 text-gray-400 hover:text-white"
-              title={task.expanded ? "Colapsar" : "Expandir para ver/agregar subtareas"}
             >
-              {task.expanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
+              {task.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => deleteTask(task.id)}
               className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
-              title="Eliminar tarea"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        {/* Subtareas */}
         {task.expanded && (
           <div className="ml-8 mt-3 space-y-2">
-            {/* Lista de subtareas */}
             {task.subtasks.map(subtask => (
               <div key={subtask.id} className="flex items-center gap-2">
                 <Checkbox
@@ -377,9 +302,7 @@ const TaskManager = () => {
                 <p className={`text-sm flex-1 ${subtask.completed ? "text-green-400 font-medium" : "text-gray-300"}`}>
                   {subtask.text}
                 </p>
-                {subtask.completed && (
-                  <CheckCircle2 className="h-3 w-3 text-green-400" />
-                )}
+                {subtask.completed && <CheckCircle2 className="h-3 w-3 text-green-400" />}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -391,7 +314,6 @@ const TaskManager = () => {
               </div>
             ))}
 
-            {/* Agregar subtarea */}
             <div className="flex gap-2 mt-2 pt-2 border-t border-gray-700">
               <Input
                 placeholder="Agregar subtarea..."
@@ -421,8 +343,6 @@ const TaskManager = () => {
     <Card className="mb-6 bg-[#161A15] border-[#161A15]">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-white">Tareas Activas</CardTitle>
-        
-        {/* Botón de agregar sutil en la esquina */}
         {!showAddTask ? (
           <Button 
             onClick={() => setShowAddTask(true)}
@@ -437,7 +357,6 @@ const TaskManager = () => {
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {/* Campo de agregar tarea (aparece solo cuando se hace click) */}
         {showAddTask && (
           <div className="flex gap-2 pb-4 border-b border-gray-700">
             <Input
@@ -470,17 +389,11 @@ const TaskManager = () => {
           </div>
         )}
 
-        {/* Dos columnas: Pendientes y Completadas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Columna Izquierda: Tareas Pendientes */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">
-                Pendientes
-              </h3>
-              <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
-                {pendingTasks.length}
-              </span>
+              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Pendientes</h3>
+              <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">{pendingTasks.length}</span>
             </div>
             <div className="space-y-3">
               {pendingTasks.length === 0 ? (
@@ -494,15 +407,10 @@ const TaskManager = () => {
             </div>
           </div>
 
-          {/* Columna Derecha: Tareas Completadas */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">
-                Completadas
-              </h3>
-              <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">
-                {completedTasks.length}
-              </span>
+              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Completadas</h3>
+              <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">{completedTasks.length}</span>
             </div>
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
@@ -516,12 +424,10 @@ const TaskManager = () => {
           </div>
         </div>
 
-        {/* Nota informativa */}
         <div className="pt-4 border-t border-gray-700">
           <p className="text-xs text-gray-500">
             💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
-            La barra amarilla muestra el progreso de subtareas completadas.
-            <span className="ml-2 text-green-400">🔄 Actualizaciones en tiempo real activadas</span>
+            <span className="ml-2 text-green-400">🔄 Actualizaciones en tiempo real</span>
           </p>
         </div>
       </CardContent>
