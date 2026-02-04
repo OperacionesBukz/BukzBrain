@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabaseClient";
+import logoImage from "@/assets/logo-bukz.png";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -68,9 +69,11 @@ const Login = () => {
       <Card className="w-full max-w-md bg-[#161A15] border-[#161A15]">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center">
-              <span className="text-accent-foreground font-bold text-2xl">B</span>
-            </div>
+            <img 
+              src={logoImage} 
+              alt="Bukz Logo" 
+              className="h-16 w-auto object-contain"
+            />
           </div>
           <CardTitle className="text-2xl font-bold text-center text-white">
             BukzBrain

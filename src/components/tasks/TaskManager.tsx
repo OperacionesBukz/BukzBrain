@@ -344,7 +344,7 @@ const TaskManager = () => {
               value={newTaskText}
               onChange={(e) => setNewTaskText(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addTask()}
-              className="bg-white flex-1"
+              className="bg-white flex-1 border-gray-300 focus-visible:ring-0 focus-visible:ring-offset-0"
               autoFocus
             />
             <Button 
