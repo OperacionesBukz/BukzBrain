@@ -29,59 +29,101 @@ const TaskManager = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
   const [currentUser, setCurrentUser] = useState("");
+  const [usePolling, setUsePolling] = useState(false); // Switch entre Realtime y Polling
   const { toast } = useToast();
 
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🚀 INICIANDO TaskManager');
+    console.log('👤 Usuario:', username);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     loadTasks();
 
+    // Intentar Realtime primero
+    console.log('📡 Intentando conectar con Realtime...');
+    
     const channel = supabase
       .channel('tasks-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
         (payload) => {
-          console.log('🔄 Cambio detectado:', payload.eventType, payload);
-          // Solo recargar si el cambio NO vino de este cliente
-          // Esto evita recargas dobles
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('🔥 ¡CAMBIO RECIBIDO VÍA REALTIME!');
+          console.log('⏰ Timestamp:', new Date().toLocaleTimeString());
+          console.log('📋 Tipo:', payload.eventType);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           handleRealtimeUpdate(payload);
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
+        console.log('📊 Estado de suscripción:', status);
+        
+        if (err) {
+          console.error('❌ Error Realtime:', err);
+          console.warn('⚠️ Cambiando a modo POLLING...');
+          setUsePolling(true);
+        }
+        
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Suscripción activa a cambios en tiempo real');
+          console.log('✅ Realtime ACTIVO');
+          setUsePolling(false);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('⚠️ Realtime falló, usando POLLING');
+          setUsePolling(true);
         }
       });
 
+    // Polling como fallback
+    let pollingInterval: NodeJS.Timeout;
+    
+    // Esperar 3 segundos para ver si Realtime se conecta
+    const pollingTimeout = setTimeout(() => {
+      if (usePolling) {
+        console.log('🔄 Iniciando polling cada 3 segundos...');
+        pollingInterval = setInterval(() => {
+          console.log('🔄 Recargando tareas (polling)...');
+          loadTasks();
+        }, 3000);
+      }
+    }, 3000);
+
     return () => {
+      console.log('🔌 Limpiando conexiones...');
       supabase.removeChannel(channel);
+      clearTimeout(pollingTimeout);
+      if (pollingInterval) clearInterval(pollingInterval);
     };
-  }, []);
+  }, [usePolling]);
 
   const handleRealtimeUpdate = (payload: any) => {
     if (payload.eventType === 'INSERT') {
-      // Agregar nueva tarea
       const newTask = {
         ...payload.new,
         subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
         expanded: false
       };
-      setTasks(prev => [newTask, ...prev]);
+      setTasks(prev => {
+        // Evitar duplicados
+        if (prev.some(t => t.id === newTask.id)) return prev;
+        return [newTask, ...prev];
+      });
     } else if (payload.eventType === 'UPDATE') {
-      // Actualizar tarea existente
       setTasks(prev => prev.map(task => {
         if (task.id === payload.new.id) {
           return {
             ...payload.new,
             subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
-            expanded: task.expanded // Mantener estado expandido
+            expanded: task.expanded
           };
         }
         return task;
       }));
     } else if (payload.eventType === 'DELETE') {
-      // Eliminar tarea
       setTasks(prev => prev.filter(task => task.id !== payload.old.id));
     }
   };
@@ -98,13 +140,15 @@ const TaskManager = () => {
         return;
       }
 
-      const parsedTasks = (data || []).map(task => ({
-        ...task,
-        subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
-        expanded: false
-      }));
-
-      setTasks(parsedTasks);
+      setTasks((prevTasks) => {
+        const expandedMap = new Map(prevTasks.map(t => [t.id, t.expanded]));
+        
+        return (data || []).map(task => ({
+          ...task,
+          subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+          expanded: expandedMap.get(task.id) ?? false
+        }));
+      });
     } catch (err) {
       console.error("Error inesperado:", err);
     }
@@ -121,7 +165,7 @@ const TaskManager = () => {
     }
 
     const newTask: Task = {
-      id: `${Date.now()}-${Math.random()}`, // ID único
+      id: `${Date.now()}-${Math.random()}`,
       text: newTaskText,
       completed: false,
       subtasks: [],
@@ -130,18 +174,16 @@ const TaskManager = () => {
       created_at: new Date().toISOString()
     };
 
-    // ✅ ACTUALIZACIÓN OPTIMISTA: Agregar inmediatamente a la UI
+    // Actualización optimista
     setTasks(prev => [newTask, ...prev]);
     setNewTaskText("");
     setShowAddTask(false);
 
-    // Luego guardar en la base de datos
     try {
       const { error } = await supabase.from('tasks').insert([newTask]);
       
       if (error) {
-        console.error("Error al crear tarea:", error);
-        // Revertir si falla
+        console.error("Error:", error);
         setTasks(prev => prev.filter(t => t.id !== newTask.id));
         toast({
           title: "Error",
@@ -180,7 +222,6 @@ const TaskManager = () => {
       completed: false
     };
 
-    // ✅ ACTUALIZACIÓN OPTIMISTA: Agregar inmediatamente a la UI
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, subtasks: [...t.subtasks, newSubtask] }
@@ -188,7 +229,6 @@ const TaskManager = () => {
     ));
     setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
 
-    // Luego guardar en la base de datos
     try {
       const { error } = await supabase
         .from('tasks')
@@ -196,8 +236,7 @@ const TaskManager = () => {
         .eq('id', taskId);
 
       if (error) {
-        console.error("Error al crear subtarea:", error);
-        // Revertir si falla
+        console.error("Error:", error);
         setTasks(prev => prev.map(t => 
           t.id === taskId 
             ? { ...t, subtasks: task.subtasks }
@@ -211,11 +250,6 @@ const TaskManager = () => {
       }
     } catch (err) {
       console.error("Error:", err);
-      setTasks(prev => prev.map(t => 
-        t.id === taskId 
-          ? { ...t, subtasks: task.subtasks }
-          : t
-      ));
     }
   };
 
@@ -226,7 +260,6 @@ const TaskManager = () => {
     const newCompleted = !task.completed;
     const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
 
-    // ✅ ACTUALIZACIÓN OPTIMISTA
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, completed: newCompleted, subtasks: updatedSubtasks }
@@ -241,7 +274,6 @@ const TaskManager = () => {
 
       if (error) {
         console.error("Error:", error);
-        // Revertir si falla
         setTasks(prev => prev.map(t => 
           t.id === taskId 
             ? { ...t, completed: task.completed, subtasks: task.subtasks }
@@ -263,7 +295,6 @@ const TaskManager = () => {
 
     const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
 
-    // ✅ ACTUALIZACIÓN OPTIMISTA
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, subtasks: updatedSubtasks, completed: allSubtasksComplete }
@@ -278,12 +309,6 @@ const TaskManager = () => {
 
       if (error) {
         console.error("Error:", error);
-        // Revertir si falla
-        setTasks(prev => prev.map(t => 
-          t.id === taskId 
-            ? { ...t, subtasks: task.subtasks, completed: task.completed }
-            : t
-        ));
       }
     } catch (err) {
       console.error("Error:", err);
@@ -294,7 +319,6 @@ const TaskManager = () => {
     const taskToDelete = tasks.find(t => t.id === taskId);
     if (!taskToDelete) return;
 
-    // ✅ ACTUALIZACIÓN OPTIMISTA
     setTasks(prev => prev.filter(t => t.id !== taskId));
 
     try {
@@ -302,19 +326,11 @@ const TaskManager = () => {
       
       if (error) {
         console.error("Error:", error);
-        // Revertir si falla
-        setTasks(prev => [...prev, taskToDelete].sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        ));
+        setTasks(prev => [...prev, taskToDelete]);
         toast({
           title: "Error",
           description: "No se pudo eliminar la tarea",
           variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "🗑️ Tarea eliminada",
-          description: "La tarea se ha eliminado correctamente",
         });
       }
     } catch (err) {
@@ -329,7 +345,6 @@ const TaskManager = () => {
     const oldSubtasks = task.subtasks;
     const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
 
-    // ✅ ACTUALIZACIÓN OPTIMISTA
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, subtasks: updatedSubtasks }
@@ -344,17 +359,11 @@ const TaskManager = () => {
 
       if (error) {
         console.error("Error:", error);
-        // Revertir si falla
         setTasks(prev => prev.map(t => 
           t.id === taskId 
             ? { ...t, subtasks: oldSubtasks }
             : t
         ));
-        toast({
-          title: "Error",
-          description: "No se pudo eliminar la subtarea",
-          variant: "destructive"
-        });
       }
     } catch (err) {
       console.error("Error:", err);
@@ -583,7 +592,13 @@ const TaskManager = () => {
         <div className="pt-4 border-t border-gray-700">
           <p className="text-xs text-gray-500">
             💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
-            <span className="ml-2 text-green-400">⚡ Actualizaciones instantáneas</span>
+            <span className="ml-2">
+              {usePolling ? (
+                <span className="text-yellow-400">🔄 Modo Polling (recarga cada 3s)</span>
+              ) : (
+                <span className="text-green-400">⚡ Actualizaciones en tiempo real</span>
+              )}
+            </span>
           </p>
         </div>
       </CardContent>
