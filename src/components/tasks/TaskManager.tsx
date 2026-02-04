@@ -361,7 +361,7 @@ const TaskManager = () => {
                 setNewTaskText("");
               }}
               size="sm"
-              variant="ghost"
+              variant="outline"
               className="flex-shrink-0"
             >
               Cancelar
@@ -383,7 +383,7 @@ const TaskManager = () => {
             </div>
             <div className="space-y-3">
               {pendingTasks.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
+                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg h-32 flex flex-col items-center justify-center">
                   <p>¡No hay tareas pendientes!</p>
                   <p className="text-xs mt-1">Agrega una nueva tarea</p>
                 </div>
@@ -405,7 +405,7 @@ const TaskManager = () => {
             </div>
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
+                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg h-32 flex flex-col items-center justify-center">
                   <p>Aún no hay tareas completadas</p>
                 </div>
               ) : (
