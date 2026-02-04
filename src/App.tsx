@@ -2,12 +2,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import Home from "./pages/Home";
 import Operaciones from "./pages/Operaciones";
 import Librerias from "./pages/Librerias";
 import Solicitudes from "./pages/Solicitudes";
+import VacacionesPermisos from "./pages/VacacionesPermisos";
 import SolicitudVacaciones from "./pages/SolicitudVacaciones";
 import SolicitudCumpleanos from "./pages/SolicitudCumpleanos";
 import InstructivoCaja from "./pages/InstructivoCaja";
@@ -22,7 +23,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter basename="/BukzBrain">
+      <HashRouter>
         <Routes>
           {/* Ruta de Login (sin layout) */}
           <Route path="/login" element={<Login />} />
@@ -41,33 +42,49 @@ const App = () => (
             <Route path="/solicitudes" element={<Solicitudes />} />
           </Route>
 
-          {/* Rutas de formularios de solicitudes (con layout) */}
+          {/* Rutas protegidas sin layout - Página principal de solicitudes */}
           <Route 
+            path="/librerias/vacaciones-permisos" 
             element={
               <ProtectedRoute>
-                <AppLayout />
+                <VacacionesPermisos />
               </ProtectedRoute>
-            }
-          >
-            <Route path="/solicitudes/vacaciones" element={<SolicitudVacaciones />} />
-            <Route path="/solicitudes/cumpleanos" element={<SolicitudCumpleanos />} />
-          </Route>
+            } 
+          />
+
+          {/* Rutas de formularios de solicitudes */}
+          <Route 
+            path="/solicitudes/vacaciones" 
+            element={
+              <ProtectedRoute>
+                <SolicitudVacaciones />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/solicitudes/cumpleanos" 
+            element={
+              <ProtectedRoute>
+                <SolicitudCumpleanos />
+              </ProtectedRoute>
+            } 
+          />
           
-          {/* Instructivo de Caja (con layout) */}
+          {/* Instructivo de Caja */}
           <Route 
+            path="/librerias/instructivo-caja" 
             element={
               <ProtectedRoute>
-                <AppLayout />
+                <InstructivoCaja />
               </ProtectedRoute>
-            }
-          >
-            <Route path="/librerias/instructivo-caja" element={<InstructivoCaja />} />
-          </Route>
+            } 
+          />
           
           {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
