@@ -60,11 +60,11 @@ export function DocumentCard({ title, instructions, buttons, emails }: DocumentC
         {buttons.map((button, index) => (
           <Button
             key={index}
-            variant="download"
+            variant="default"
             className="w-full justify-start"
             onClick={() => handleDownload(button.href, button.label)}
           >
-            <Download className="h-4 w-4" />
+            <Download className="h-4 w-4 mr-2" />
             {button.label}
           </Button>
         ))}
