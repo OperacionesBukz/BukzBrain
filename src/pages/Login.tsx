@@ -22,19 +22,19 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      console.log("Intentando login con:", username);
+      console.log("🔐 Intentando login con:", username);
       
-      // Buscar usuario en Supabase (case-insensitive)
+      // Buscar usuario en Supabase
       const { data, error: supabaseError } = await supabase
         .from('users')
         .select('*')
         .ilike('username', username)
         .single();
 
-      console.log("Respuesta de Supabase:", { data, supabaseError });
+      console.log("📊 Respuesta de Supabase:", { data, supabaseError });
 
       if (supabaseError) {
-        console.error("Error de Supabase:", supabaseError);
+        console.error("❌ Error de Supabase:", supabaseError);
         setError("Usuario o contraseña incorrectos");
         setIsLoading(false);
         return;
@@ -48,24 +48,34 @@ const Login = () => {
 
       // Verificar contraseña
       if (data.password === password) {
+        console.log("✅ Contraseña correcta, guardando en localStorage...");
+        
         // Guardar en localStorage
         localStorage.setItem("isAuthenticated", "true");
         localStorage.setItem("userRole", data.role || "employee");
         localStorage.setItem("username", data.username);
         
-        console.log("Login exitoso, redirigiendo...");
+        console.log("💾 Datos guardados:", {
+          isAuthenticated: localStorage.getItem("isAuthenticated"),
+          userRole: localStorage.getItem("userRole"),
+          username: localStorage.getItem("username")
+        });
         
-        // SOLUCIÓN DEFINITIVA: Usar window.location para forzar navegación
-        const baseUrl = window.location.origin;
-        const basePath = '/BukzBrain';
-        window.location.href = baseUrl + basePath + '/';
+        console.log("🚀 Redirigiendo a home...");
+        
+        // Pequeño delay para asegurar que se guardó
+        setTimeout(() => {
+          navigate("/", { replace: true });
+        }, 100);
+        
       } else {
+        console.log("❌ Contraseña incorrecta");
         setError("Usuario o contraseña incorrectos");
+        setIsLoading(false);
       }
     } catch (err) {
-      console.error("Error en login:", err);
+      console.error("💥 Error en login:", err);
       setError("Error al iniciar sesión. Por favor intenta de nuevo.");
-    } finally {
       setIsLoading(false);
     }
   };
