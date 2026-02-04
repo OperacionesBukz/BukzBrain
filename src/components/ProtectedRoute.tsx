@@ -6,40 +6,19 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  // Verificar si hay una sesión de Bukz guardada
-  const bukzAuth = localStorage.getItem("bukz_auth");
+  // Verificar autenticación en localStorage
+  const isAuthenticated = localStorage.getItem("isAuthenticated");
   
-  // Si no hay sesión, redirigir al login
-  if (!bukzAuth) {
+  console.log("ProtectedRoute check:", { isAuthenticated });
+  
+  // Si NO está autenticado, redirigir a login
+  if (!isAuthenticated || isAuthenticated !== "true") {
+    console.log("No autenticado, redirigiendo a login");
     return <Navigate to="/login" replace />;
   }
-
-  // Verificar que la sesión sea válida (JSON parseable)
-  try {
-    const auth = JSON.parse(bukzAuth);
-    
-    // Verificar que tenga un rol válido
-    if (!auth.role || !auth.timestamp) {
-      localStorage.removeItem("bukz_auth");
-      return <Navigate to="/login" replace />;
-    }
-    
-    // Opcional: Verificar expiración de sesión (24 horas)
-    const now = Date.now();
-    const hoursSinceLogin = (now - auth.timestamp) / (1000 * 60 * 60);
-    
-    if (hoursSinceLogin > 24) {
-      localStorage.removeItem("bukz_auth");
-      return <Navigate to="/login" replace />;
-    }
-    
-  } catch (error) {
-    // Si hay error al parsear, limpiar y redirigir
-    localStorage.removeItem("bukz_auth");
-    return <Navigate to="/login" replace />;
-  }
-
-  // Si todo está bien, mostrar el contenido
+  
+  console.log("Autenticado, mostrando contenido");
+  // Si está autenticado, mostrar el contenido
   return <>{children}</>;
 };
 
