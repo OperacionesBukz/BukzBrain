@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 interface Subtask {
   id: string;
@@ -18,8 +19,8 @@ interface Task {
   completed: boolean;
   subtasks: Subtask[];
   expanded: boolean;
-  createdBy: string;
-  createdAt: string;
+  created_by: string;
+  created_at: string;
 }
 
 const TaskManager = () => {
@@ -37,22 +38,33 @@ const TaskManager = () => {
     loadTasks();
   }, []);
 
-  // Cargar tareas desde localStorage
-  const loadTasks = () => {
-    const savedTasks = localStorage.getItem("bukz_tasks");
-    if (savedTasks) {
-      setTasks(JSON.parse(savedTasks));
+  // Cargar tareas desde Supabase
+  const loadTasks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Error cargando tareas:", error);
+        return;
+      }
+
+      const parsedTasks = (data || []).map(task => ({
+        ...task,
+        subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+        expanded: false
+      }));
+
+      setTasks(parsedTasks);
+    } catch (err) {
+      console.error("Error:", err);
     }
   };
 
-  // Guardar tareas en localStorage
-  const saveTasks = (updatedTasks: Task[]) => {
-    localStorage.setItem("bukz_tasks", JSON.stringify(updatedTasks));
-    setTasks(updatedTasks);
-  };
-
   // Agregar nueva tarea principal
-  const addTask = () => {
+  const addTask = async () => {
     if (!newTaskText.trim()) {
       toast({
         title: "Campo vacío",
@@ -62,24 +74,35 @@ const TaskManager = () => {
       return;
     }
 
-    const newTask: Task = {
+    const newTask = {
       id: Date.now().toString(),
       text: newTaskText,
       completed: false,
       subtasks: [],
-      expanded: false,
-      createdBy: currentUser,
-      createdAt: new Date().toISOString()
+      created_by: currentUser,
+      created_at: new Date().toISOString()
     };
 
-    const updatedTasks = [...tasks, newTask];
-    saveTasks(updatedTasks);
-    setNewTaskText("");
-    setShowAddTask(false);
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .insert([newTask]);
+
+      if (error) {
+        console.error("Error creando tarea:", error);
+        return;
+      }
+
+      await loadTasks();
+      setNewTaskText("");
+      setShowAddTask(false);
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
   // Agregar subtarea
-  const addSubtask = (taskId: string) => {
+  const addSubtask = async (taskId: string) => {
     const subtaskText = newSubtaskText[taskId]?.trim();
     if (!subtaskText) {
       toast({
@@ -90,88 +113,142 @@ const TaskManager = () => {
       return;
     }
 
-    const updatedTasks = tasks.map(task => {
-      if (task.id === taskId) {
-        return {
-          ...task,
-          subtasks: [
-            ...task.subtasks,
-            {
-              id: Date.now().toString(),
-              text: subtaskText,
-              completed: false
-            }
-          ]
-        };
-      }
-      return task;
-    });
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
 
-    saveTasks(updatedTasks);
-    setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
+    const newSubtask = {
+      id: Date.now().toString(),
+      text: subtaskText,
+      completed: false
+    };
+
+    const updatedSubtasks = [...task.subtasks, newSubtask];
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ subtasks: updatedSubtasks })
+        .eq('id', taskId);
+
+      if (error) {
+        console.error("Error:", error);
+        return;
+      }
+
+      await loadTasks();
+      setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
   // Toggle completar tarea principal
-  const toggleTaskComplete = (taskId: string) => {
-    const updatedTasks = tasks.map(task => {
-      if (task.id === taskId) {
-        const newCompleted = !task.completed;
-        return {
-          ...task,
+  const toggleTaskComplete = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const newCompleted = !task.completed;
+    const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ 
           completed: newCompleted,
-          subtasks: task.subtasks.map(st => ({ ...st, completed: newCompleted }))
-        };
+          subtasks: updatedSubtasks
+        })
+        .eq('id', taskId);
+
+      if (error) {
+        console.error("Error:", error);
+        return;
       }
-      return task;
-    });
-    saveTasks(updatedTasks);
+
+      await loadTasks();
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
   // Toggle completar subtarea
-  const toggleSubtaskComplete = (taskId: string, subtaskId: string) => {
-    const updatedTasks = tasks.map(task => {
-      if (task.id === taskId) {
-        const updatedSubtasks = task.subtasks.map(st =>
-          st.id === subtaskId ? { ...st, completed: !st.completed } : st
-        );
-        const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
-        return {
-          ...task,
+  const toggleSubtaskComplete = async (taskId: string, subtaskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const updatedSubtasks = task.subtasks.map(st =>
+      st.id === subtaskId ? { ...st, completed: !st.completed } : st
+    );
+
+    const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ 
           subtasks: updatedSubtasks,
           completed: allSubtasksComplete
-        };
+        })
+        .eq('id', taskId);
+
+      if (error) {
+        console.error("Error:", error);
+        return;
       }
-      return task;
-    });
-    saveTasks(updatedTasks);
+
+      await loadTasks();
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
   // Eliminar tarea
-  const deleteTask = (taskId: string) => {
-    const updatedTasks = tasks.filter(task => task.id !== taskId);
-    saveTasks(updatedTasks);
+  const deleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) {
+        console.error("Error:", error);
+        return;
+      }
+
+      await loadTasks();
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
   // Eliminar subtarea
-  const deleteSubtask = (taskId: string, subtaskId: string) => {
-    const updatedTasks = tasks.map(task => {
-      if (task.id === taskId) {
-        return {
-          ...task,
-          subtasks: task.subtasks.filter(st => st.id !== subtaskId)
-        };
+  const deleteSubtask = async (taskId: string, subtaskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ subtasks: updatedSubtasks })
+        .eq('id', taskId);
+
+      if (error) {
+        console.error("Error:", error);
+        return;
       }
-      return task;
-    });
-    saveTasks(updatedTasks);
+
+      await loadTasks();
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
-  // Toggle expandir/colapsar tarea
+  // Toggle expandir/colapsar tarea (solo local, no guardar en DB)
   const toggleExpanded = (taskId: string) => {
-    const updatedTasks = tasks.map(task =>
+    setTasks(tasks.map(task =>
       task.id === taskId ? { ...task, expanded: !task.expanded } : task
-    );
-    saveTasks(updatedTasks);
+    ));
   };
 
   // Calcular progreso de subtareas
@@ -218,7 +295,7 @@ const TaskManager = () => {
             </div>
             <div className="flex items-center gap-3 mt-1">
               <p className="text-xs text-gray-400">
-                Por: {task.createdBy} • {new Date(task.createdAt).toLocaleDateString()}
+                Por: {task.created_by} • {new Date(task.created_at).toLocaleDateString()}
               </p>
               {/* Mostrar progreso de subtareas si está colapsado y tiene subtareas */}
               {!task.expanded && progress && (
