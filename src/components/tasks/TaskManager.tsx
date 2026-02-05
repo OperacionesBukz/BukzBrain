@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,8 +29,9 @@ const TaskManager = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
   const [currentUser, setCurrentUser] = useState("");
-  const [usePolling, setUsePolling] = useState(false); // Switch entre Realtime y Polling
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'realtime' | 'polling'>('connecting');
   const { toast } = useToast();
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
@@ -43,62 +44,78 @@ const TaskManager = () => {
     
     loadTasks();
 
-    // Intentar Realtime primero
-    console.log('📡 Intentando conectar con Realtime...');
+    // Intentar Realtime
+    console.log('📡 Conectando con Realtime...');
     
     const channel = supabase
-      .channel('tasks-changes')
+      .channel('tasks-changes', {
+        config: {
+          broadcast: { self: true }
+        }
+      })
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'tasks' 
+        },
         (payload) => {
           console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           console.log('🔥 ¡CAMBIO RECIBIDO VÍA REALTIME!');
           console.log('⏰ Timestamp:', new Date().toLocaleTimeString());
-          console.log('📋 Tipo:', payload.eventType);
+          console.log('📋 Evento:', payload.eventType);
+          console.log('📦 Datos:', payload);
           console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           handleRealtimeUpdate(payload);
         }
       )
-      .subscribe((status, err) => {
-        console.log('📊 Estado de suscripción:', status);
-        
-        if (err) {
-          console.error('❌ Error Realtime:', err);
-          console.warn('⚠️ Cambiando a modo POLLING...');
-          setUsePolling(true);
-        }
+      .subscribe((status) => {
+        console.log('📊 Estado de conexión:', status);
         
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime ACTIVO');
-          setUsePolling(false);
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('⚠️ Realtime falló, usando POLLING');
-          setUsePolling(true);
+          console.log('✅ ¡REALTIME ACTIVO!');
+          setConnectionStatus('realtime');
+          // Detener polling si estaba activo
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn('⚠️ Realtime falló, iniciando POLLING...');
+          setConnectionStatus('polling');
+          startPolling();
         }
       });
 
-    // Polling como fallback
-    let pollingInterval: NodeJS.Timeout;
-    
-    // Esperar 3 segundos para ver si Realtime se conecta
-    const pollingTimeout = setTimeout(() => {
-      if (usePolling) {
-        console.log('🔄 Iniciando polling cada 3 segundos...');
-        pollingInterval = setInterval(() => {
-          console.log('🔄 Recargando tareas (polling)...');
-          loadTasks();
-        }, 3000);
+    // Timeout de seguridad: si en 5 segundos no se conecta, usar polling
+    const timeout = setTimeout(() => {
+      if (connectionStatus === 'connecting') {
+        console.warn('⏱️ Timeout de conexión, usando POLLING');
+        setConnectionStatus('polling');
+        startPolling();
       }
-    }, 3000);
+    }, 5000);
 
     return () => {
       console.log('🔌 Limpiando conexiones...');
+      clearTimeout(timeout);
       supabase.removeChannel(channel);
-      clearTimeout(pollingTimeout);
-      if (pollingInterval) clearInterval(pollingInterval);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
     };
-  }, [usePolling]);
+  }, []); // Sin dependencias - solo se ejecuta al montar
+
+  const startPolling = () => {
+    if (pollingIntervalRef.current) return; // Ya está activo
+    
+    console.log('🔄 Iniciando polling cada 3 segundos...');
+    pollingIntervalRef.current = setInterval(() => {
+      console.log('🔄 Recargando tareas (polling)...');
+      loadTasks();
+    }, 3000);
+  };
 
   const handleRealtimeUpdate = (payload: any) => {
     if (payload.eventType === 'INSERT') {
@@ -109,21 +126,27 @@ const TaskManager = () => {
       };
       setTasks(prev => {
         // Evitar duplicados
-        if (prev.some(t => t.id === newTask.id)) return prev;
+        if (prev.some(t => t.id === newTask.id)) {
+          console.log('⚠️ Tarea duplicada detectada, ignorando');
+          return prev;
+        }
+        console.log('➕ Agregando tarea nueva');
         return [newTask, ...prev];
       });
     } else if (payload.eventType === 'UPDATE') {
+      console.log('🔄 Actualizando tarea');
       setTasks(prev => prev.map(task => {
         if (task.id === payload.new.id) {
           return {
             ...payload.new,
             subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
-            expanded: task.expanded
+            expanded: task.expanded // Mantener estado expandido
           };
         }
         return task;
       }));
     } else if (payload.eventType === 'DELETE') {
+      console.log('🗑️ Eliminando tarea');
       setTasks(prev => prev.filter(task => task.id !== payload.old.id));
     }
   };
@@ -136,11 +159,12 @@ const TaskManager = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error("Error al cargar tareas:", error);
+        console.error("❌ Error al cargar tareas:", error);
         return;
       }
 
       setTasks((prevTasks) => {
+        // Mantener estado expandido al recargar
         const expandedMap = new Map(prevTasks.map(t => [t.id, t.expanded]));
         
         return (data || []).map(task => ({
@@ -150,7 +174,7 @@ const TaskManager = () => {
         }));
       });
     } catch (err) {
-      console.error("Error inesperado:", err);
+      console.error("💥 Error inesperado:", err);
     }
   };
 
@@ -183,21 +207,17 @@ const TaskManager = () => {
       const { error } = await supabase.from('tasks').insert([newTask]);
       
       if (error) {
-        console.error("Error:", error);
+        console.error("❌ Error creando tarea:", error);
+        // Rollback
         setTasks(prev => prev.filter(t => t.id !== newTask.id));
         toast({
           title: "Error",
           description: "No se pudo crear la tarea",
           variant: "destructive"
         });
-      } else {
-        toast({
-          title: "✅ Tarea creada",
-          description: "La tarea se ha agregado correctamente",
-        });
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("💥 Error:", err);
       setTasks(prev => prev.filter(t => t.id !== newTask.id));
     }
   };
@@ -222,9 +242,12 @@ const TaskManager = () => {
       completed: false
     };
 
+    const updatedSubtasks = [...task.subtasks, newSubtask];
+
+    // Actualización optimista
     setTasks(prev => prev.map(t => 
       t.id === taskId 
-        ? { ...t, subtasks: [...t.subtasks, newSubtask] }
+        ? { ...t, subtasks: updatedSubtasks }
         : t
     ));
     setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
@@ -232,24 +255,20 @@ const TaskManager = () => {
     try {
       const { error } = await supabase
         .from('tasks')
-        .update({ subtasks: [...task.subtasks, newSubtask] })
+        .update({ subtasks: updatedSubtasks })
         .eq('id', taskId);
 
       if (error) {
-        console.error("Error:", error);
+        console.error("❌ Error:", error);
+        // Rollback
         setTasks(prev => prev.map(t => 
           t.id === taskId 
             ? { ...t, subtasks: task.subtasks }
             : t
         ));
-        toast({
-          title: "Error",
-          description: "No se pudo crear la subtarea",
-          variant: "destructive"
-        });
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("💥 Error:", err);
     }
   };
 
@@ -260,6 +279,7 @@ const TaskManager = () => {
     const newCompleted = !task.completed;
     const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
 
+    // Actualización optimista
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, completed: newCompleted, subtasks: updatedSubtasks }
@@ -273,7 +293,8 @@ const TaskManager = () => {
         .eq('id', taskId);
 
       if (error) {
-        console.error("Error:", error);
+        console.error("❌ Error:", error);
+        // Rollback
         setTasks(prev => prev.map(t => 
           t.id === taskId 
             ? { ...t, completed: task.completed, subtasks: task.subtasks }
@@ -281,7 +302,7 @@ const TaskManager = () => {
         ));
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("💥 Error:", err);
     }
   };
 
@@ -295,6 +316,7 @@ const TaskManager = () => {
 
     const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
 
+    // Actualización optimista
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, subtasks: updatedSubtasks, completed: allSubtasksComplete }
@@ -308,10 +330,10 @@ const TaskManager = () => {
         .eq('id', taskId);
 
       if (error) {
-        console.error("Error:", error);
+        console.error("❌ Error:", error);
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("💥 Error:", err);
     }
   };
 
@@ -319,13 +341,15 @@ const TaskManager = () => {
     const taskToDelete = tasks.find(t => t.id === taskId);
     if (!taskToDelete) return;
 
+    // Actualización optimista
     setTasks(prev => prev.filter(t => t.id !== taskId));
 
     try {
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       
       if (error) {
-        console.error("Error:", error);
+        console.error("❌ Error:", error);
+        // Rollback
         setTasks(prev => [...prev, taskToDelete]);
         toast({
           title: "Error",
@@ -334,7 +358,7 @@ const TaskManager = () => {
         });
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("💥 Error:", err);
     }
   };
 
@@ -345,6 +369,7 @@ const TaskManager = () => {
     const oldSubtasks = task.subtasks;
     const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
 
+    // Actualización optimista
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, subtasks: updatedSubtasks }
@@ -358,7 +383,8 @@ const TaskManager = () => {
         .eq('id', taskId);
 
       if (error) {
-        console.error("Error:", error);
+        console.error("❌ Error:", error);
+        // Rollback
         setTasks(prev => prev.map(t => 
           t.id === taskId 
             ? { ...t, subtasks: oldSubtasks }
@@ -366,7 +392,7 @@ const TaskManager = () => {
         ));
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("💥 Error:", err);
     }
   };
 
@@ -593,10 +619,14 @@ const TaskManager = () => {
           <p className="text-xs text-gray-500">
             💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
             <span className="ml-2">
-              {usePolling ? (
-                <span className="text-yellow-400">🔄 Modo Polling (recarga cada 3s)</span>
-              ) : (
-                <span className="text-green-400">⚡ Actualizaciones en tiempo real</span>
+              {connectionStatus === 'connecting' && (
+                <span className="text-blue-400">🔄 Conectando...</span>
+              )}
+              {connectionStatus === 'polling' && (
+                <span className="text-yellow-400">🔄 Modo Polling (actualiza cada 3s)</span>
+              )}
+              {connectionStatus === 'realtime' && (
+                <span className="text-green-400">⚡ Tiempo real activo</span>
               )}
             </span>
           </p>
@@ -607,4 +637,3 @@ const TaskManager = () => {
 };
 
 export default TaskManager;
-
