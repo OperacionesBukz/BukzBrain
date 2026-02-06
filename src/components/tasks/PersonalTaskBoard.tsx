@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronRight, StickyNote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -36,9 +35,9 @@ const PersonalTaskBoard = () => {
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
   const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
   
-  // NUEVO: Estado local para las notas mientras se editan
-  const [localNotes, setLocalNotes] = useState<{ [key: string]: string }>({});
-  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  // Refs para evitar reloads durante edición
+  const saveTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  const isEditingRef = useRef<boolean>(false);
   
   const { toast } = useToast();
 
@@ -48,14 +47,18 @@ const PersonalTaskBoard = () => {
     loadPersonalTasks(username);
 
     const interval = setInterval(() => {
-      // No recargar si está editando algo
-      if (!editingTaskId && !editingSubtaskId && !editingNotesId) {
+      // Solo recargar si NO está editando
+      if (!isEditingRef.current) {
         loadPersonalTasks(username);
       }
     }, 5000);
 
-    return () => clearInterval(interval);
-  }, [editingTaskId, editingSubtaskId, editingNotesId]);
+    return () => {
+      clearInterval(interval);
+      // Limpiar todos los timeouts
+      Object.values(saveTimeoutRef.current).forEach(timeout => clearTimeout(timeout));
+    };
+  }, []);
 
   const loadPersonalTasks = async (username: string) => {
     try {
@@ -63,7 +66,7 @@ const PersonalTaskBoard = () => {
         .from('personal_tasks')
         .select('*')
         .eq('created_by', username)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false});
 
       if (error) {
         console.error("Error al cargar tareas:", error);
@@ -175,24 +178,32 @@ const PersonalTaskBoard = () => {
     }
   };
 
-  const updateTaskNotes = async (taskId: string, notes: string) => {
-    try {
-      const { error } = await supabase
-        .from('personal_tasks')
-        .update({ notes })
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
-
-      if (error) {
-        console.error("Error:", error);
-      } else {
-        await loadPersonalTasks(currentUser);
-        setEditingNotesId(null);
-      }
-    } catch (err) {
-      console.error("Error:", err);
+  // Función de guardado con debounce
+  const saveNotesDebounced = useCallback((taskId: string, notes: string) => {
+    // Cancelar timeout anterior si existe
+    if (saveTimeoutRef.current[taskId]) {
+      clearTimeout(saveTimeoutRef.current[taskId]);
     }
-  };
+
+    // Crear nuevo timeout
+    saveTimeoutRef.current[taskId] = setTimeout(async () => {
+      try {
+        const { error } = await supabase
+          .from('personal_tasks')
+          .update({ notes })
+          .eq('id', taskId)
+          .eq('created_by', currentUser);
+
+        if (error) {
+          console.error("Error al guardar notas:", error);
+        } else {
+          console.log("✅ Notas guardadas automáticamente");
+        }
+      } catch (err) {
+        console.error("Error:", err);
+      }
+    }, 1000); // Espera 1 segundo después de dejar de escribir
+  }, [currentUser]);
 
   const addSubtask = async (taskId: string) => {
     const subtaskText = newSubtaskText[taskId]?.trim();
@@ -415,11 +426,6 @@ const PersonalTaskBoard = () => {
     const isExpanded = expandedTasks.has(task.id);
     const progress = getSubtaskProgress(task);
     const isEditingTask = editingTaskId === task.id;
-    
-    // Usar estado local para las notas mientras se editan
-    const currentNotes = editingNotesId === task.id 
-      ? (localNotes[task.id] ?? task.notes) 
-      : task.notes;
 
     return (
       <div
@@ -538,26 +544,32 @@ const PersonalTaskBoard = () => {
         {/* Detalles expandidos */}
         {isExpanded && (
           <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-gray-700">
-            {/* Notas - USANDO ESTADO LOCAL */}
+            {/* Notas - TEXTAREA NATIVO con debounce */}
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
                 <StickyNote className="h-3 w-3" />
-                Notas
+                Notas (se guardan automáticamente)
               </label>
-              <Textarea
-                value={currentNotes}
+              <textarea
+                defaultValue={task.notes}
                 onChange={(e) => {
-                  setLocalNotes({ ...localNotes, [task.id]: e.target.value });
+                  // Actualizar estado local inmediatamente
+                  const updatedTasks = tasks.map(t =>
+                    t.id === task.id ? { ...t, notes: e.target.value } : t
+                  );
+                  setTasks(updatedTasks);
+                  // Guardar con debounce
+                  saveNotesDebounced(task.id, e.target.value);
                 }}
                 onFocus={() => {
-                  setEditingNotesId(task.id);
-                  setLocalNotes({ ...localNotes, [task.id]: task.notes });
+                  isEditingRef.current = true;
                 }}
                 onBlur={() => {
-                  updateTaskNotes(task.id, localNotes[task.id] || task.notes);
+                  isEditingRef.current = false;
                 }}
                 placeholder="Agrega notas o recordatorios..."
-                className="bg-white text-sm min-h-[60px]"
+                className="w-full bg-white text-sm min-h-[60px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
+                style={{ fontFamily: 'inherit' }}
               />
             </div>
 
@@ -648,6 +660,12 @@ const PersonalTaskBoard = () => {
                   onChange={(e) =>
                     setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
                   }
+                  onFocus={() => {
+                    isEditingRef.current = true;
+                  }}
+                  onBlur={() => {
+                    isEditingRef.current = false;
+                  }}
                   onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
                   className="bg-white text-sm h-8"
                 />
