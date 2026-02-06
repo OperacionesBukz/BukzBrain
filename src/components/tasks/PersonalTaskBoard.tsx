@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,12 +33,8 @@ const PersonalTaskBoard = () => {
   const [editingText, setEditingText] = useState("");
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
-  const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
   
-  // Refs para evitar reloads durante edición
-  const saveTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
-  const isEditingRef = useRef<boolean>(false);
-  
+  const lastLoadRef = useRef<number>(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -46,18 +42,12 @@ const PersonalTaskBoard = () => {
     setCurrentUser(username);
     loadPersonalTasks(username);
 
+    // Polling más lento (10 segundos)
     const interval = setInterval(() => {
-      // Solo recargar si NO está editando
-      if (!isEditingRef.current) {
-        loadPersonalTasks(username);
-      }
-    }, 5000);
+      loadPersonalTasks(username);
+    }, 10000);
 
-    return () => {
-      clearInterval(interval);
-      // Limpiar todos los timeouts
-      Object.values(saveTimeoutRef.current).forEach(timeout => clearTimeout(timeout));
-    };
+    return () => clearInterval(interval);
   }, []);
 
   const loadPersonalTasks = async (username: string) => {
@@ -66,7 +56,7 @@ const PersonalTaskBoard = () => {
         .from('personal_tasks')
         .select('*')
         .eq('created_by', username)
-        .order('created_at', { ascending: false});
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error("Error al cargar tareas:", error);
@@ -80,6 +70,7 @@ const PersonalTaskBoard = () => {
       }));
 
       setTasks(tasksWithDefaults);
+      lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("Error inesperado:", err);
     }
@@ -178,36 +169,24 @@ const PersonalTaskBoard = () => {
     }
   };
 
-  // Función de guardado con debounce
-  const saveNotesDebounced = useCallback((taskId: string, notes: string) => {
-    // Cancelar timeout anterior si existe
-    if (saveTimeoutRef.current[taskId]) {
-      clearTimeout(saveTimeoutRef.current[taskId]);
-    }
+  const updateTaskNotes = async (taskId: string, notes: string) => {
+    try {
+      const { error } = await supabase
+        .from('personal_tasks')
+        .update({ notes })
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
 
-    // Crear nuevo timeout
-    saveTimeoutRef.current[taskId] = setTimeout(async () => {
-      try {
-        const { error } = await supabase
-          .from('personal_tasks')
-          .update({ notes })
-          .eq('id', taskId)
-          .eq('created_by', currentUser);
-
-        if (error) {
-          console.error("Error al guardar notas:", error);
-        } else {
-          console.log("✅ Notas guardadas automáticamente");
-        }
-      } catch (err) {
-        console.error("Error:", err);
+      if (!error) {
+        console.log("✅ Notas guardadas");
       }
-    }, 1000); // Espera 1 segundo después de dejar de escribir
-  }, [currentUser]);
+    } catch (err) {
+      console.error("Error:", err);
+    }
+  };
 
-  const addSubtask = async (taskId: string) => {
-    const subtaskText = newSubtaskText[taskId]?.trim();
-    if (!subtaskText) {
+  const addSubtask = async (taskId: string, subtaskText: string) => {
+    if (!subtaskText.trim()) {
       toast({
         title: "Campo vacío",
         description: "Ingresa un texto para la subtarea",
@@ -242,7 +221,6 @@ const PersonalTaskBoard = () => {
           variant: "destructive"
         });
       } else {
-        setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
         await loadPersonalTasks(currentUser);
       }
     } catch (err) {
@@ -426,6 +404,10 @@ const PersonalTaskBoard = () => {
     const isExpanded = expandedTasks.has(task.id);
     const progress = getSubtaskProgress(task);
     const isEditingTask = editingTaskId === task.id;
+    
+    // Refs para inputs no controlados
+    const notesRef = useRef<HTMLTextAreaElement>(null);
+    const subtaskInputRef = useRef<HTMLInputElement>(null);
 
     return (
       <div
@@ -544,32 +526,21 @@ const PersonalTaskBoard = () => {
         {/* Detalles expandidos */}
         {isExpanded && (
           <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-gray-700">
-            {/* Notas - TEXTAREA NATIVO con debounce */}
+            {/* Notas - INPUT NO CONTROLADO */}
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
                 <StickyNote className="h-3 w-3" />
-                Notas (se guardan automáticamente)
+                Notas (se guardan al salir del campo)
               </label>
               <textarea
+                ref={notesRef}
+                key={`notes-${task.id}-${lastLoadRef.current}`} // Key único para resetear
                 defaultValue={task.notes}
-                onChange={(e) => {
-                  // Actualizar estado local inmediatamente
-                  const updatedTasks = tasks.map(t =>
-                    t.id === task.id ? { ...t, notes: e.target.value } : t
-                  );
-                  setTasks(updatedTasks);
-                  // Guardar con debounce
-                  saveNotesDebounced(task.id, e.target.value);
-                }}
-                onFocus={() => {
-                  isEditingRef.current = true;
-                }}
-                onBlur={() => {
-                  isEditingRef.current = false;
+                onBlur={(e) => {
+                  updateTaskNotes(task.id, e.target.value);
                 }}
                 placeholder="Agrega notas o recordatorios..."
                 className="w-full bg-white text-sm min-h-[60px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
-                style={{ fontFamily: 'inherit' }}
               />
             </div>
 
@@ -652,25 +623,27 @@ const PersonalTaskBoard = () => {
                 </div>
               )}
 
-              {/* Agregar nueva subtarea */}
+              {/* Agregar nueva subtarea - INPUT NO CONTROLADO */}
               <div className="flex gap-2">
-                <Input
+                <input
+                  ref={subtaskInputRef}
+                  type="text"
                   placeholder="Agregar subtarea..."
-                  value={newSubtaskText[task.id] || ""}
-                  onChange={(e) =>
-                    setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
-                  }
-                  onFocus={() => {
-                    isEditingRef.current = true;
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && subtaskInputRef.current) {
+                      addSubtask(task.id, subtaskInputRef.current.value);
+                      subtaskInputRef.current.value = "";
+                    }
                   }}
-                  onBlur={() => {
-                    isEditingRef.current = false;
-                  }}
-                  onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
-                  className="bg-white text-sm h-8"
+                  className="flex-1 bg-white text-sm h-8 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F]"
                 />
                 <Button
-                  onClick={() => addSubtask(task.id)}
+                  onClick={() => {
+                    if (subtaskInputRef.current) {
+                      addSubtask(task.id, subtaskInputRef.current.value);
+                      subtaskInputRef.current.value = "";
+                    }
+                  }}
                   size="sm"
                   className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
                 >
