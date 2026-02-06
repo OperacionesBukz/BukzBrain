@@ -35,6 +35,7 @@ const PersonalTaskBoard = () => {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
   const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
+  const [isEditing, setIsEditing] = useState(false); // Nuevo: flag para saber si está editando
   const { toast } = useToast();
 
   useEffect(() => {
@@ -43,11 +44,14 @@ const PersonalTaskBoard = () => {
     loadPersonalTasks(username);
 
     const interval = setInterval(() => {
-      loadPersonalTasks(username);
+      // Solo recargar si NO está editando
+      if (!isEditing) {
+        loadPersonalTasks(username);
+      }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isEditing]); // Agregar isEditing como dependencia
 
   const loadPersonalTasks = async (username: string) => {
     try {
@@ -430,6 +434,8 @@ const PersonalTaskBoard = () => {
                 <Input
                   value={editingText}
                   onChange={(e) => setEditingText(e.target.value)}
+                  onFocus={() => setIsEditing(true)} // Marcar como editando
+                  onBlur={() => setIsEditing(false)} // Ya no está editando
                   onKeyPress={(e) => {
                     if (e.key === "Enter") updateTaskText(task.id, editingText);
                   }}
@@ -538,7 +544,11 @@ const PersonalTaskBoard = () => {
                   );
                   setTasks(updatedTasks);
                 }}
-                onBlur={() => updateTaskNotes(task.id, task.notes)}
+                onFocus={() => setIsEditing(true)} // Marcar como editando
+                onBlur={() => {
+                  setIsEditing(false); // Ya no está editando
+                  updateTaskNotes(task.id, task.notes);
+                }}
                 placeholder="Agrega notas o recordatorios..."
                 className="bg-white text-sm min-h-[60px]"
               />
@@ -566,6 +576,8 @@ const PersonalTaskBoard = () => {
                           <Input
                             value={editingSubtaskText}
                             onChange={(e) => setEditingSubtaskText(e.target.value)}
+                            onFocus={() => setIsEditing(true)} // Marcar como editando
+                            onBlur={() => setIsEditing(false)} // Ya no está editando
                             onKeyPress={(e) => {
                               if (e.key === "Enter") {
                                 updateSubtaskText(task.id, subtask.id, editingSubtaskText);
@@ -631,6 +643,8 @@ const PersonalTaskBoard = () => {
                   onChange={(e) =>
                     setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
                   }
+                  onFocus={() => setIsEditing(true)} // Marcar como editando
+                  onBlur={() => setIsEditing(false)} // Ya no está editando
                   onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
                   className="bg-white text-sm h-8"
                 />
