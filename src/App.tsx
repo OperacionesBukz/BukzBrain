@@ -42,17 +42,9 @@ const App = () => (
             <Route path="/operaciones" element={<Operaciones />} />
             <Route path="/librerias" element={<Librerias />} />
             <Route path="/solicitudes" element={<Solicitudes />} />
+            {/* NUEVA RUTA: Panel de tareas personales (con navegación visible) */}
+            <Route path="/my-tasks" element={<MyTasks />} />
           </Route>
-
-          {/* NUEVA RUTA: Panel de tareas personales (sin layout de navegación, pero con header propio) */}
-          <Route 
-            path="/my-tasks" 
-            element={
-              <ProtectedRoute>
-                <MyTasks />
-              </ProtectedRoute>
-            } 
-          />
 
           {/* Rutas protegidas sin layout - Página principal de solicitudes */}
           <Route 
