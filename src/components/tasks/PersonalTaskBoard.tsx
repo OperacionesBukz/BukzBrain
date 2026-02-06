@@ -35,7 +35,11 @@ const PersonalTaskBoard = () => {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
   const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
-  const [isEditing, setIsEditing] = useState(false); // Nuevo: flag para saber si está editando
+  
+  // NUEVO: Estado local para las notas mientras se editan
+  const [localNotes, setLocalNotes] = useState<{ [key: string]: string }>({});
+  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  
   const { toast } = useToast();
 
   useEffect(() => {
@@ -44,14 +48,14 @@ const PersonalTaskBoard = () => {
     loadPersonalTasks(username);
 
     const interval = setInterval(() => {
-      // Solo recargar si NO está editando
-      if (!isEditing) {
+      // No recargar si está editando algo
+      if (!editingTaskId && !editingSubtaskId && !editingNotesId) {
         loadPersonalTasks(username);
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isEditing]); // Agregar isEditing como dependencia
+  }, [editingTaskId, editingSubtaskId, editingNotesId]);
 
   const loadPersonalTasks = async (username: string) => {
     try {
@@ -183,6 +187,7 @@ const PersonalTaskBoard = () => {
         console.error("Error:", error);
       } else {
         await loadPersonalTasks(currentUser);
+        setEditingNotesId(null);
       }
     } catch (err) {
       console.error("Error:", err);
@@ -410,6 +415,11 @@ const PersonalTaskBoard = () => {
     const isExpanded = expandedTasks.has(task.id);
     const progress = getSubtaskProgress(task);
     const isEditingTask = editingTaskId === task.id;
+    
+    // Usar estado local para las notas mientras se editan
+    const currentNotes = editingNotesId === task.id 
+      ? (localNotes[task.id] ?? task.notes) 
+      : task.notes;
 
     return (
       <div
@@ -434,8 +444,6 @@ const PersonalTaskBoard = () => {
                 <Input
                   value={editingText}
                   onChange={(e) => setEditingText(e.target.value)}
-                  onFocus={() => setIsEditing(true)} // Marcar como editando
-                  onBlur={() => setIsEditing(false)} // Ya no está editando
                   onKeyPress={(e) => {
                     if (e.key === "Enter") updateTaskText(task.id, editingText);
                   }}
@@ -530,24 +538,23 @@ const PersonalTaskBoard = () => {
         {/* Detalles expandidos */}
         {isExpanded && (
           <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-gray-700">
-            {/* Notas */}
+            {/* Notas - USANDO ESTADO LOCAL */}
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
                 <StickyNote className="h-3 w-3" />
                 Notas
               </label>
               <Textarea
-                value={task.notes}
+                value={currentNotes}
                 onChange={(e) => {
-                  const updatedTasks = tasks.map(t =>
-                    t.id === task.id ? { ...t, notes: e.target.value } : t
-                  );
-                  setTasks(updatedTasks);
+                  setLocalNotes({ ...localNotes, [task.id]: e.target.value });
                 }}
-                onFocus={() => setIsEditing(true)} // Marcar como editando
+                onFocus={() => {
+                  setEditingNotesId(task.id);
+                  setLocalNotes({ ...localNotes, [task.id]: task.notes });
+                }}
                 onBlur={() => {
-                  setIsEditing(false); // Ya no está editando
-                  updateTaskNotes(task.id, task.notes);
+                  updateTaskNotes(task.id, localNotes[task.id] || task.notes);
                 }}
                 placeholder="Agrega notas o recordatorios..."
                 className="bg-white text-sm min-h-[60px]"
@@ -576,8 +583,6 @@ const PersonalTaskBoard = () => {
                           <Input
                             value={editingSubtaskText}
                             onChange={(e) => setEditingSubtaskText(e.target.value)}
-                            onFocus={() => setIsEditing(true)} // Marcar como editando
-                            onBlur={() => setIsEditing(false)} // Ya no está editando
                             onKeyPress={(e) => {
                               if (e.key === "Enter") {
                                 updateSubtaskText(task.id, subtask.id, editingSubtaskText);
@@ -643,8 +648,6 @@ const PersonalTaskBoard = () => {
                   onChange={(e) =>
                     setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
                   }
-                  onFocus={() => setIsEditing(true)} // Marcar como editando
-                  onBlur={() => setIsEditing(false)} // Ya no está editando
                   onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
                   className="bg-white text-sm h-8"
                 />
