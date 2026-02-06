@@ -15,6 +15,8 @@ import InstructivoCaja from "./pages/InstructivoCaja";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+// NUEVO: Importar página de tareas personales
+import MyTasks from "./pages/MyTasks";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +43,16 @@ const App = () => (
             <Route path="/librerias" element={<Librerias />} />
             <Route path="/solicitudes" element={<Solicitudes />} />
           </Route>
+
+          {/* NUEVA RUTA: Panel de tareas personales (sin layout de navegación, pero con header propio) */}
+          <Route 
+            path="/my-tasks" 
+            element={
+              <ProtectedRoute>
+                <MyTasks />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* Rutas protegidas sin layout - Página principal de solicitudes */}
           <Route 
