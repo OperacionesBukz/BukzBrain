@@ -102,8 +102,9 @@ const TaskManager = () => {
   const loadTasks = async () => {
     try {
       const { data, error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .select('*')
+        .eq('created_by', currentUser)
         .order('order', { ascending: true })
         .order('created_at', { ascending: false });
 
@@ -145,7 +146,7 @@ const TaskManager = () => {
     if (activeTask.completed !== overTask.completed) {
       try {
         const { error } = await supabase
-          .from('tasks')
+          .from('personal_tasks')
           .update({ completed: overTask.completed })
           .eq('id', activeTask.id).eq('created_by', currentUser);
 
@@ -175,7 +176,7 @@ const TaskManager = () => {
         try {
           for (const update of updates) {
             await supabase
-              .from('tasks')
+              .from('personal_tasks')
               .update({ order: update.order })
               .eq('id', update.id);
           }
@@ -213,7 +214,7 @@ const TaskManager = () => {
 
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .insert([newTask])
         .select();
       
@@ -256,7 +257,7 @@ const TaskManager = () => {
 
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .update({ text: newText })
         .eq('id', taskId).eq('created_by', currentUser);
 
@@ -283,7 +284,7 @@ const TaskManager = () => {
   const updateTaskNotes = async (taskId: string, notes: string) => {
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .update({ notes })
         .eq('id', taskId).eq('created_by', currentUser);
 
@@ -318,7 +319,7 @@ const TaskManager = () => {
 
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
         .eq('id', taskId).eq('created_by', currentUser);
 
@@ -356,7 +357,7 @@ const TaskManager = () => {
 
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
         .eq('id', taskId).eq('created_by', currentUser);
 
@@ -388,7 +389,7 @@ const TaskManager = () => {
 
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .update({ 
           subtasks: updatedSubtasks,
           completed: allSubtasksComplete 
@@ -413,7 +414,7 @@ const TaskManager = () => {
 
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
         .eq('id', taskId).eq('created_by', currentUser);
 
@@ -440,7 +441,7 @@ const TaskManager = () => {
 
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .update({ 
           completed: newCompleted,
           subtasks: updatedSubtasks 
@@ -460,7 +461,7 @@ const TaskManager = () => {
   const deleteTask = async (taskId: string) => {
     try {
       const { error } = await supabase
-        .from('tasks')
+        .from('personal_tasks')
         .delete()
         .eq('id', taskId).eq('created_by', currentUser);
       
@@ -521,7 +522,14 @@ const TaskManager = () => {
         }`}
       >
         {/* Header de la tarea */}
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
+          {/* CHECKBOX A LA IZQUIERDA */}
+          <Checkbox
+            checked={task.completed}
+            onCheckedChange={() => toggleTaskComplete(task.id)}
+            className="flex-shrink-0"
+          />
+          
           <div className="flex-1 space-y-2">
             {/* Nombre de la tarea (editable) */}
             {isEditingTask ? (
@@ -599,7 +607,7 @@ const TaskManager = () => {
             </div>
           </div>
 
-          {/* Botones de acción - CHECKBOX A LA DERECHA */}
+          {/* Botones de acción A LA DERECHA */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <Button
               variant="ghost"
@@ -617,11 +625,6 @@ const TaskManager = () => {
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-            <Checkbox
-              checked={task.completed}
-              onCheckedChange={() => toggleTaskComplete(task.id)}
-              className="ml-1"
-            />
           </div>
         </div>
 
@@ -642,7 +645,7 @@ const TaskManager = () => {
                   updateTaskNotes(task.id, e.target.value);
                 }}
                 placeholder="Agrega notas o recordatorios..."
-                className="w-full bg-white text-sm min-h-[60px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
+                className="w-full bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm min-h-[60px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
               />
             </div>
 
@@ -736,7 +739,7 @@ const TaskManager = () => {
                       subtaskInputRef.current.value = "";
                     }
                   }}
-                  className="flex-1 bg-white text-sm h-8 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F]"
+                  className="flex-1 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm h-8 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F]"
                 />
                 <Button
                   onClick={() => {
