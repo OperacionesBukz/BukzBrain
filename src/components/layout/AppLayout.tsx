@@ -47,7 +47,7 @@ const AppLayout = () => {
             variant="ghost"
             size="icon"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="text-foreground hover:bg-foreground/10 flex-shrink-0"
+            className="text-black hover:bg-black/10 flex-shrink-0"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -65,12 +65,12 @@ const AppLayout = () => {
           </button>
 
           {/* Vertical Separator */}
-          <div className="h-8 w-px bg-foreground/20" />
+          <div className="h-8 w-px bg-black/20" />
 
           {/* Page Title */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold text-foreground truncate">{title}</h1>
-            <p className="text-xs text-foreground/70 truncate hidden sm:block">{subtitle}</p>
+            <h1 className="text-lg font-bold text-black truncate">{title}</h1>
+            <p className="text-xs text-black/70 truncate hidden sm:block">{subtitle}</p>
           </div>
 
           {/* Settings Button - NUEVO */}
@@ -78,7 +78,7 @@ const AppLayout = () => {
             variant="ghost"
             size="icon"
             onClick={() => setShowSettingsModal(true)}
-            className="text-foreground hover:bg-foreground/10 flex-shrink-0"
+            className="text-black hover:bg-black/10 flex-shrink-0"
             title="Configuración"
           >
             <Settings className="h-5 w-5" />
@@ -88,15 +88,15 @@ const AppLayout = () => {
           {username && (
             <button
               onClick={() => navigate("/my-tasks")}
-              className="flex items-center gap-2 px-3 py-1.5 bg-foreground/10 rounded-lg hover:bg-foreground/20 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 bg-black/10 rounded-lg hover:bg-black/20 transition-colors"
               title="Ir a mis tareas"
             >
-              <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center">
-                <span className="text-accent-foreground text-sm font-semibold">
+              <div className="w-8 h-8 bg-black/20 rounded-full flex items-center justify-center">
+                <span className="text-black text-sm font-semibold">
                   {username.charAt(0).toUpperCase()}
                 </span>
               </div>
-              <span className="text-sm font-medium text-foreground hidden sm:inline">{username}</span>
+              <span className="text-sm font-medium text-black hidden sm:inline">{username}</span>
             </button>
           )}
         </div>
