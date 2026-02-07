@@ -76,6 +76,11 @@ const TaskManager = () => {
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   
+  // NUEVO: Estados para proteger campos activos y debouncing
+  const [focusedFields, setFocusedFields] = useState<Set<string>>(new Set());
+  const [localNotes, setLocalNotes] = useState<{ [key: string]: string }>({});
+  const saveTimersRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  
   const lastLoadRef = useRef<number>(0);
   const { toast } = useToast();
 
@@ -96,10 +101,20 @@ const TaskManager = () => {
       loadTasks();
     }, 2000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      clearInterval(interval);
+      // Limpiar todos los timers pendientes
+      Object.values(saveTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, [focusedFields]); // Dependencia para reaccionar a cambios en campos activos
 
   const loadTasks = async () => {
+    // PROTECCIÓN: No recargar si hay campos activos
+    if (focusedFields.size > 0) {
+      console.log('⏸️ Reload pausado - usuario escribiendo en', focusedFields.size, 'campos');
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('personal_tasks')
@@ -294,6 +309,20 @@ const TaskManager = () => {
     } catch (err) {
       console.error("Error:", err);
     }
+  };
+
+  // NUEVO: Función con debounce para guardar notas
+  const debouncedSaveNotes = (taskId: string, notes: string) => {
+    // Cancelar timer anterior si existe
+    if (saveTimersRef.current[`notes-${taskId}`]) {
+      clearTimeout(saveTimersRef.current[`notes-${taskId}`]);
+    }
+
+    // Crear nuevo timer - espera 800ms después de dejar de escribir
+    saveTimersRef.current[`notes-${taskId}`] = setTimeout(() => {
+      updateTaskNotes(taskId, notes);
+      delete saveTimersRef.current[`notes-${taskId}`];
+    }, 800);
   };
 
   const addSubtask = async (taskId: string, subtaskText: string) => {
@@ -635,17 +664,50 @@ const TaskManager = () => {
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
                 <StickyNote className="h-3 w-3" />
-                Notas (se guardan al salir del campo)
+                Notas (se guardan automáticamente al escribir)
               </label>
               <textarea
-                ref={notesRef}
-                key={`notes-${task.id}-${lastLoadRef.current}`}
-                defaultValue={task.notes}
+                value={localNotes[task.id] ?? task.notes}
+                onFocus={() => {
+                  // PROTECCIÓN: Marcar campo como activo
+                  setFocusedFields(prev => new Set(prev).add(`notes-${task.id}`));
+                  // Inicializar nota local si no existe
+                  if (localNotes[task.id] === undefined) {
+                    setLocalNotes(prev => ({ ...prev, [task.id]: task.notes }));
+                  }
+                }}
+                onChange={(e) => {
+                  // Actualizar estado local inmediatamente
+                  const newValue = e.target.value;
+                  setLocalNotes(prev => ({ ...prev, [task.id]: newValue }));
+                  
+                  // DEBOUNCE: Cancelar guardado anterior
+                  if (saveTimersRef.current[`notes-${task.id}`]) {
+                    clearTimeout(saveTimersRef.current[`notes-${task.id}`]);
+                  }
+                  
+                  // DEBOUNCE: Guardar después de 800ms sin escribir
+                  saveTimersRef.current[`notes-${task.id}`] = setTimeout(() => {
+                    debouncedSaveNotes(task.id, newValue);
+                    delete saveTimersRef.current[`notes-${task.id}`];
+                  }, 800);
+                }}
                 onBlur={(e) => {
+                  // PROTECCIÓN: Desmarcar campo
+                  setFocusedFields(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(`notes-${task.id}`);
+                    return newSet;
+                  });
+                  
+                  // Guardar inmediatamente al salir
+                  if (saveTimersRef.current[`notes-${task.id}`]) {
+                    clearTimeout(saveTimersRef.current[`notes-${task.id}`]);
+                  }
                   updateTaskNotes(task.id, e.target.value);
                 }}
                 placeholder="Agrega notas o recordatorios..."
-                className="w-full bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm min-h-[60px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
+                className="w-full bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm min-h-[60px] p-2 rounded-md border border-gray-300 dark:border-[#2a2a2a] focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
               />
             </div>
 
