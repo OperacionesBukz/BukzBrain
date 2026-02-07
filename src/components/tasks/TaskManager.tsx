@@ -92,9 +92,10 @@ const TaskManager = () => {
     setCurrentUser(username);
     loadTasks();
 
+    // Polling reducido a 2 segundos para actualizaciones más rápidas
     const interval = setInterval(() => {
       loadTasks();
-    }, 10000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, []);
@@ -143,14 +144,27 @@ const TaskManager = () => {
 
     // Si se mueve entre columnas (pendiente <-> completada)
     if (activeTask.completed !== overTask.completed) {
+      // OPTIMISTIC UI: Actualizar inmediatamente
+      setTasks(prev => prev.map(t => 
+        t.id === activeTask.id 
+          ? { ...t, completed: overTask.completed }
+          : t
+      ));
+
       try {
         const { error } = await supabase
           .from('tasks')
           .update({ completed: overTask.completed })
           .eq('id', activeTask.id);
 
-        if (!error) {
-          await loadTasks();
+        if (error) {
+          console.error("Error:", error);
+          // Revertir
+          setTasks(prev => prev.map(t => 
+            t.id === activeTask.id 
+              ? { ...t, completed: activeTask.completed }
+              : t
+          ));
         }
       } catch (err) {
         console.error("Error:", err);
@@ -166,7 +180,15 @@ const TaskManager = () => {
         const [removed] = reordered.splice(oldIndex, 1);
         reordered.splice(newIndex, 0, removed);
 
-        // Actualizar órdenes
+        // OPTIMISTIC UI: Actualizar orden inmediatamente
+        const otherTasks = tasks.filter(t => t.completed !== activeTask.completed);
+        const newTaskList = reordered.map((task, index) => ({ ...task, order: index }));
+        setTasks([...newTaskList, ...otherTasks].sort((a, b) => {
+          if (a.completed !== b.completed) return a.completed ? 1 : -1;
+          return (a.order || 0) - (b.order || 0);
+        }));
+
+        // Actualizar en background
         const updates = reordered.map((task, index) => ({
           id: task.id,
           order: index
@@ -179,9 +201,10 @@ const TaskManager = () => {
               .update({ order: update.order })
               .eq('id', update.id);
           }
-          await loadTasks();
         } catch (err) {
           console.error("Error:", err);
+          // Recargar si falla
+          await loadTasks();
         }
       }
     }
@@ -211,6 +234,15 @@ const TaskManager = () => {
       order: 0
     };
 
+    // OPTIMISTIC UI: Actualizar inmediatamente
+    setTasks(prev => [newTask, ...prev]);
+    setNewTaskText("");
+    
+    toast({
+      title: "✅ Tarea creada",
+      description: "La tarea se ha agregado",
+    });
+
     try {
       const { error } = await supabase
         .from('tasks')
@@ -219,21 +251,21 @@ const TaskManager = () => {
       
       if (error) {
         console.error("Error:", error);
+        // Revertir cambio optimista
+        setTasks(prev => prev.filter(t => t.id !== newTask.id));
         toast({
           title: "Error",
           description: error.message,
           variant: "destructive"
         });
       } else {
-        setNewTaskText("");
+        // Recargar para sincronizar
         await loadTasks();
-        toast({
-          title: "✅ Tarea creada",
-          description: "La tarea se ha agregado",
-        });
       }
     } catch (err) {
       console.error("Error:", err);
+      // Revertir cambio optimista
+      setTasks(prev => prev.filter(t => t.id !== newTask.id));
       toast({
         title: "Error",
         description: "Ocurrió un error al crear la tarea",
@@ -438,6 +470,13 @@ const TaskManager = () => {
     const newCompleted = !task.completed;
     const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
 
+    // OPTIMISTIC UI: Actualizar inmediatamente
+    setTasks(prev => prev.map(t => 
+      t.id === taskId 
+        ? { ...t, completed: newCompleted, subtasks: updatedSubtasks }
+        : t
+    ));
+
     try {
       const { error } = await supabase
         .from('tasks')
@@ -449,11 +488,21 @@ const TaskManager = () => {
 
       if (error) {
         console.error("Error:", error);
-      } else {
-        await loadTasks();
+        // Revertir cambio optimista
+        setTasks(prev => prev.map(t => 
+          t.id === taskId 
+            ? { ...t, completed: task.completed, subtasks: task.subtasks }
+            : t
+        ));
       }
     } catch (err) {
       console.error("Error:", err);
+      // Revertir cambio optimista
+      setTasks(prev => prev.map(t => 
+        t.id === taskId 
+          ? { ...t, completed: task.completed, subtasks: task.subtasks }
+          : t
+      ));
     }
   };
 
@@ -539,7 +588,7 @@ const TaskManager = () => {
                   onKeyPress={(e) => {
                     if (e.key === "Enter") updateTaskText(task.id, editingText);
                   }}
-                  className="bg-white text-sm h-8"
+                  className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 text-sm h-8"
                   autoFocus
                 />
                 <Button
@@ -674,7 +723,7 @@ const TaskManager = () => {
                                 updateSubtaskText(task.id, subtask.id, editingSubtaskText);
                               }
                             }}
-                            className="bg-white text-xs h-7"
+                            className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 text-xs h-7"
                             autoFocus
                           />
                           <Button
@@ -786,7 +835,7 @@ const TaskManager = () => {
                 value={newTaskText}
                 onChange={(e) => setNewTaskText(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && !isLoading && addTask()}
-                className="bg-white"
+                className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 disabled={isLoading}
               />
               <Button

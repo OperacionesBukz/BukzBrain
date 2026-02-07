@@ -94,7 +94,7 @@ const TaskManager = () => {
 
     const interval = setInterval(() => {
       loadTasks();
-    }, 10000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, []);
@@ -787,7 +787,7 @@ const TaskManager = () => {
                 value={newTaskText}
                 onChange={(e) => setNewTaskText(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && !isLoading && addTask()}
-                className="bg-white"
+                className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 disabled={isLoading}
               />
               <Button
