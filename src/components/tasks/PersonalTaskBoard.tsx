@@ -413,8 +413,8 @@ const PersonalTaskBoard = () => {
       <div
         className={`border rounded-lg p-3 transition-all ${
           task.completed 
-            ? "bg-gray-900/50 border-gray-700" 
-            : "bg-gray-800 border-gray-700 hover:border-gray-600"
+            ? "bg-[#1a1a1a] border-[#2a2a2a]" 
+            : "bg-[#0f0f0f] border-[#2a2a2a] hover:border-[#3a3a3a]"
         }`}
       >
         {/* Header de la tarea */}
@@ -476,7 +476,7 @@ const PersonalTaskBoard = () => {
             {/* Progreso de subtareas */}
             {progress && (
               <div className="flex items-center gap-2 text-xs text-gray-400">
-                <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div className="flex-1 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-green-500 transition-all" 
                     style={{ width: `${progress.percentage}%` }}
@@ -525,7 +525,7 @@ const PersonalTaskBoard = () => {
 
         {/* Detalles expandidos */}
         {isExpanded && (
-          <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-gray-700">
+          <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-[#2a2a2a]">
             {/* Notas - INPUT NO CONTROLADO */}
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
@@ -554,7 +554,7 @@ const PersonalTaskBoard = () => {
               {task.subtasks.length > 0 && (
                 <div className="space-y-2 mb-2">
                   {task.subtasks.map(subtask => (
-                    <div key={subtask.id} className="flex items-center gap-2 bg-gray-900/50 p-2 rounded">
+                    <div key={subtask.id} className="flex items-center gap-2 bg-[#1a1a1a] p-2 rounded border border-[#2a2a2a]">
                       <Checkbox
                         checked={subtask.completed}
                         onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
@@ -661,7 +661,7 @@ const PersonalTaskBoard = () => {
   return (
     <div className="space-y-6">
       {/* Header con input */}
-      <Card className="bg-[#161A15] border-[#161A15]">
+      <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
         <CardHeader className="pb-4">
           <CardTitle className="text-white">Mis Tareas Personales</CardTitle>
           <p className="text-xs text-gray-400 mt-1">
@@ -693,7 +693,7 @@ const PersonalTaskBoard = () => {
       {/* Tablero Horizontal */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Columna: En Proceso */}
-        <Card className="bg-[#161A15] border-[#161A15]">
+        <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white text-lg flex items-center gap-2">
@@ -707,7 +707,7 @@ const PersonalTaskBoard = () => {
           <CardContent>
             <div className="space-y-2 max-h-[700px] overflow-y-auto">
               {pendingTasks.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
+                <div className="text-center py-12 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg">
                   <p>No hay tareas pendientes</p>
                   <p className="text-xs text-gray-600 mt-1">¡Excelente! 🎉</p>
                 </div>
@@ -719,7 +719,7 @@ const PersonalTaskBoard = () => {
         </Card>
 
         {/* Columna: Finalizadas */}
-        <Card className="bg-[#161A15] border-[#161A15]">
+        <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white text-lg flex items-center gap-2">
@@ -733,7 +733,7 @@ const PersonalTaskBoard = () => {
           <CardContent>
             <div className="space-y-2 max-h-[700px] overflow-y-auto">
               {completedTasks.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
+                <div className="text-center py-12 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg">
                   <p>Aún no has completado tareas</p>
                 </div>
               ) : (
