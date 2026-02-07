@@ -1,46 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Library, ClipboardList, HelpCircle, Menu, Home as HomeIcon, LogOut, FileText } from "lucide-react";
+import { Home, Library, ClipboardList, FileText, Menu, LogOut, HelpCircle, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logoImage from "@/assets/logo-bukz.png";
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
-interface NavItem {
-  label: string;
-  icon: React.ElementType;
-  id: string;
-  path: string;
-}
-
-const navItems: NavItem[] = [
-  { label: "Home", icon: HomeIcon, id: "home", path: "/" },
-  { label: "Operaciones", icon: ClipboardList, id: "operaciones", path: "/operaciones" },
-  { label: "Librerías", icon: Library, id: "librerias", path: "/librerias" },
-  { label: "Solicitudes", icon: FileText, id: "solicitudes", path: "/solicitudes" },
-];
+import { SettingsModal } from "@/components/SettingsModal";
 
 const AppLayout = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showHelpDialog, setShowHelpDialog] = useState(false);
-  const [username, setUsername] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showHelpDialog, setShowHelpDialog] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  useEffect(() => {
-    const user = localStorage.getItem("username");
-    if (user) {
-      setUsername(user);
-    }
-  }, []);
+  const username = localStorage.getItem("username") || "";
+
+  const navItems = [
+    { id: "home", label: "Inicio", icon: Home, path: "/" },
+    { id: "operaciones", label: "Operaciones", icon: ClipboardList, path: "/operaciones" },
+    { id: "librerias", label: "Biblioteca", icon: Library, path: "/librerias" },
+    { id: "solicitudes", label: "Solicitudes", icon: FileText, path: "/solicitudes" },
+  ];
 
   const getPageTitle = () => {
     const currentPath = location.pathname;
@@ -48,7 +29,7 @@ const AppLayout = () => {
     if (currentPath.includes("/operaciones")) return { title: "Operaciones", subtitle: "Guías y procedimientos para gestión operativa" };
     if (currentPath.includes("/librerias")) return { title: "Biblioteca de Documentos", subtitle: "Descarga formatos, guías e instructivos oficiales" };
     if (currentPath.includes("/solicitudes")) return { title: "Solicitudes", subtitle: "Gestiona tus solicitudes de vacaciones y permisos" };
-    if (currentPath.includes("/my-tasks")) return { title: "Mis Tareas", subtitle: "Panel personal de tareas" };
+    if (currentPath.includes("/my-tasks")) return { title: "Mis Tareas", subtitle: "Panel personal de organización" };
     return { title: "Bukz Brain", subtitle: "Sistema de Documentación Interna" };
   };
 
@@ -57,8 +38,8 @@ const AppLayout = () => {
   const sidebarWidth = 257;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Fixed Header - Shopify Style */}
+    <div className="min-h-screen bg-background dark:bg-[#0a0a0a] flex flex-col">
+      {/* Fixed Header - SIEMPRE AMARILLO */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-primary border-b border-yellow-600 h-16">
         <div className="h-full flex items-center px-4 gap-4">
           {/* Sidebar Toggle Button */}
@@ -92,7 +73,18 @@ const AppLayout = () => {
             <p className="text-xs text-foreground/70 truncate hidden sm:block">{subtitle}</p>
           </div>
 
-          {/* MODIFICADO: Usuario clickeable que redirige a /my-tasks */}
+          {/* Settings Button - NUEVO */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowSettingsModal(true)}
+            className="text-foreground hover:bg-foreground/10 flex-shrink-0"
+            title="Configuración"
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
+
+          {/* Usuario en header - CLICKEABLE para ir a tareas */}
           {username && (
             <button
               onClick={() => navigate("/my-tasks")}
@@ -115,7 +107,7 @@ const AppLayout = () => {
         {/* Collapsible Sidebar */}
         <aside 
           className={cn(
-            "fixed left-0 top-16 bottom-0 z-40 bg-sidebar transition-all duration-300"
+            "fixed left-0 top-16 bottom-0 z-40 bg-sidebar dark:bg-[#0f0f0f] transition-all duration-300"
           )}
           style={{
             width: sidebarCollapsed ? '64px' : `${sidebarWidth}px`,
@@ -137,8 +129,8 @@ const AppLayout = () => {
                       "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
                       sidebarCollapsed && "justify-center px-2",
                       isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent/50 font-medium"
+                        ? "bg-sidebar-accent dark:bg-[#2a2a2a] text-sidebar-accent-foreground dark:text-white font-semibold"
+                        : "text-sidebar-foreground dark:text-gray-300 hover:bg-sidebar-accent/50 dark:hover:bg-[#1a1a1a] font-medium"
                     )}
                     title={sidebarCollapsed ? item.label : undefined}
                   >
@@ -150,12 +142,12 @@ const AppLayout = () => {
             </nav>
 
             {/* Help and Logout section at bottom */}
-            <div className="border-t border-sidebar-border p-2 space-y-1">
+            <div className="border-t border-sidebar-border dark:border-[#2a2a2a] p-2 space-y-1">
               {/* Ayuda con pop-up */}
               <button
                 onClick={() => setShowHelpDialog(true)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50",
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground dark:text-gray-300 transition-colors hover:bg-sidebar-accent/50 dark:hover:bg-[#1a1a1a]",
                   sidebarCollapsed && "justify-center px-2"
                 )}
                 title={sidebarCollapsed ? "Ayuda y Soporte" : undefined}
@@ -172,7 +164,7 @@ const AppLayout = () => {
                   navigate("/login");
                 }}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50",
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground dark:text-gray-300 transition-colors hover:bg-sidebar-accent/50 dark:hover:bg-[#1a1a1a]",
                   sidebarCollapsed && "justify-center px-2"
                 )}
                 title={sidebarCollapsed ? "Cerrar Sesión" : undefined}
@@ -197,32 +189,41 @@ const AppLayout = () => {
 
       {/* Dialog de Ayuda */}
       <AlertDialog open={showHelpDialog} onOpenChange={setShowHelpDialog}>
-        <AlertDialogContent className="bg-card border-border">
+        <AlertDialogContent className="bg-card dark:bg-[#0f0f0f] border-border dark:border-[#2a2a2a]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+            <AlertDialogTitle className="flex items-center gap-2 dark:text-white">
               <HelpCircle className="h-5 w-5" />
               Ayuda y Soporte
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="dark:text-gray-300">
               Para cualquier ayuda o soporte técnico, por favor contacta a nuestro equipo de
               operaciones:
-              <div className="mt-4 p-3 bg-accent/10 border border-accent/20 rounded-lg">
-                <p className="text-accent font-medium">
+              <div className="mt-4 p-3 bg-accent/10 dark:bg-[#F7DC6F]/10 border border-accent/20 dark:border-[#F7DC6F]/30 rounded-lg">
+                <p className="text-accent dark:text-[#F7DC6F] font-medium">
                   📧 operaciones@bukz.co
                 </p>
               </div>
-              <p className="mt-3 text-sm text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground dark:text-gray-400">
                 Nuestro equipo responderá a tu solicitud lo antes posible.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setShowHelpDialog(false)}>
+            <AlertDialogAction 
+              onClick={() => setShowHelpDialog(false)}
+              className="bg-primary dark:bg-[#F7DC6F] text-primary-foreground dark:text-black"
+            >
               Entendido
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Configuración - NUEVO */}
+      <SettingsModal 
+        open={showSettingsModal} 
+        onOpenChange={setShowSettingsModal} 
+      />
     </div>
   );
 };
