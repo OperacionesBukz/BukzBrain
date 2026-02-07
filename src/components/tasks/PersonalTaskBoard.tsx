@@ -6,6 +6,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronRight, StickyNote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Subtask {
   id: string;
@@ -13,7 +29,7 @@ interface Subtask {
   completed: boolean;
 }
 
-interface PersonalTask {
+interface Task {
   id: string;
   text: string;
   notes: string;
@@ -21,10 +37,35 @@ interface PersonalTask {
   completed: boolean;
   created_by: string;
   created_at: string;
+  order?: number;
 }
 
-const PersonalTaskBoard = () => {
-  const [tasks, setTasks] = useState<PersonalTask[]>([]);
+// Componente de tarea arrastrable
+function SortableTaskCard({ task, children }: { task: Task; children: React.ReactNode }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+}
+
+const TaskManager = () => {
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [currentUser, setCurrentUser] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -33,29 +74,37 @@ const PersonalTaskBoard = () => {
   const [editingText, setEditingText] = useState("");
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
+  const [activeId, setActiveId] = useState<string | null>(null);
   
   const lastLoadRef = useRef<number>(0);
   const { toast } = useToast();
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
-    loadPersonalTasks(username);
+    loadTasks();
 
-    // Polling más lento (10 segundos)
     const interval = setInterval(() => {
-      loadPersonalTasks(username);
+      loadTasks();
     }, 10000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const loadPersonalTasks = async (username: string) => {
+  const loadTasks = async () => {
     try {
       const { data, error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .select('*')
-        .eq('created_by', username)
+        .order('order', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -66,13 +115,75 @@ const PersonalTaskBoard = () => {
       const tasksWithDefaults = (data || []).map(task => ({
         ...task,
         notes: task.notes || "",
-        subtasks: Array.isArray(task.subtasks) ? task.subtasks : []
+        subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+        order: task.order || 0
       }));
 
       setTasks(tasksWithDefaults);
       lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("Error inesperado:", err);
+    }
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || active.id === over.id) return;
+
+    const activeTask = tasks.find(t => t.id === active.id);
+    const overTask = tasks.find(t => t.id === over.id);
+
+    if (!activeTask || !overTask) return;
+
+    // Si se mueve entre columnas (pendiente <-> completada)
+    if (activeTask.completed !== overTask.completed) {
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({ completed: overTask.completed })
+          .eq('id', activeTask.id).eq('created_by', currentUser);
+
+        if (!error) {
+          await loadTasks();
+        }
+      } catch (err) {
+        console.error("Error:", err);
+      }
+    } else {
+      // Reordenar dentro de la misma columna
+      const taskList = tasks.filter(t => t.completed === activeTask.completed);
+      const oldIndex = taskList.findIndex(t => t.id === active.id);
+      const newIndex = taskList.findIndex(t => t.id === over.id);
+
+      if (oldIndex !== newIndex) {
+        const reordered = [...taskList];
+        const [removed] = reordered.splice(oldIndex, 1);
+        reordered.splice(newIndex, 0, removed);
+
+        // Actualizar órdenes
+        const updates = reordered.map((task, index) => ({
+          id: task.id,
+          order: index
+        }));
+
+        try {
+          for (const update of updates) {
+            await supabase
+              .from('tasks')
+              .update({ order: update.order })
+              .eq('id', update.id);
+          }
+          await loadTasks();
+        } catch (err) {
+          console.error("Error:", err);
+        }
+      }
     }
   };
 
@@ -89,19 +200,20 @@ const PersonalTaskBoard = () => {
     if (isLoading) return;
     setIsLoading(true);
 
-    const newTask: PersonalTask = {
+    const newTask: Task = {
       id: `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       text: newTaskText,
       notes: "",
       subtasks: [],
       completed: false,
       created_by: currentUser,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      order: 0
     };
 
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .insert([newTask])
         .select();
       
@@ -114,10 +226,10 @@ const PersonalTaskBoard = () => {
         });
       } else {
         setNewTaskText("");
-        await loadPersonalTasks(currentUser);
+        await loadTasks();
         toast({
           title: "✅ Tarea creada",
-          description: "Tu tarea personal se ha agregado",
+          description: "La tarea se ha agregado",
         });
       }
     } catch (err) {
@@ -144,10 +256,9 @@ const PersonalTaskBoard = () => {
 
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .update({ text: newText })
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
+        .eq('id', taskId).eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
@@ -157,7 +268,7 @@ const PersonalTaskBoard = () => {
           variant: "destructive"
         });
       } else {
-        await loadPersonalTasks(currentUser);
+        await loadTasks();
         setEditingTaskId(null);
         toast({
           title: "✅ Actualizado",
@@ -172,10 +283,9 @@ const PersonalTaskBoard = () => {
   const updateTaskNotes = async (taskId: string, notes: string) => {
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .update({ notes })
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
+        .eq('id', taskId).eq('created_by', currentUser);
 
       if (!error) {
         console.log("✅ Notas guardadas");
@@ -208,10 +318,9 @@ const PersonalTaskBoard = () => {
 
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
+        .eq('id', taskId).eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
@@ -221,7 +330,7 @@ const PersonalTaskBoard = () => {
           variant: "destructive"
         });
       } else {
-        await loadPersonalTasks(currentUser);
+        await loadTasks();
       }
     } catch (err) {
       console.error("Error:", err);
@@ -247,15 +356,14 @@ const PersonalTaskBoard = () => {
 
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
+        .eq('id', taskId).eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
       } else {
-        await loadPersonalTasks(currentUser);
+        await loadTasks();
         setEditingSubtaskId(null);
         toast({
           title: "✅ Actualizado",
@@ -280,18 +388,17 @@ const PersonalTaskBoard = () => {
 
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .update({ 
           subtasks: updatedSubtasks,
           completed: allSubtasksComplete 
         })
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
+        .eq('id', taskId).eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
       } else {
-        await loadPersonalTasks(currentUser);
+        await loadTasks();
       }
     } catch (err) {
       console.error("Error:", err);
@@ -306,15 +413,14 @@ const PersonalTaskBoard = () => {
 
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
+        .eq('id', taskId).eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
       } else {
-        await loadPersonalTasks(currentUser);
+        await loadTasks();
         toast({
           title: "Subtarea eliminada",
           description: "La subtarea se eliminó correctamente",
@@ -334,18 +440,17 @@ const PersonalTaskBoard = () => {
 
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .update({ 
           completed: newCompleted,
           subtasks: updatedSubtasks 
         })
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
+        .eq('id', taskId).eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
       } else {
-        await loadPersonalTasks(currentUser);
+        await loadTasks();
       }
     } catch (err) {
       console.error("Error:", err);
@@ -355,10 +460,9 @@ const PersonalTaskBoard = () => {
   const deleteTask = async (taskId: string) => {
     try {
       const { error } = await supabase
-        .from('personal_tasks')
+        .from('tasks')
         .delete()
-        .eq('id', taskId)
-        .eq('created_by', currentUser);
+        .eq('id', taskId).eq('created_by', currentUser);
       
       if (error) {
         console.error("Error:", error);
@@ -368,7 +472,7 @@ const PersonalTaskBoard = () => {
           variant: "destructive"
         });
       } else {
-        await loadPersonalTasks(currentUser);
+        await loadTasks();
         toast({
           title: "Tarea eliminada",
           description: "La tarea se eliminó correctamente",
@@ -389,7 +493,7 @@ const PersonalTaskBoard = () => {
     setExpandedTasks(newExpanded);
   };
 
-  const getSubtaskProgress = (task: PersonalTask) => {
+  const getSubtaskProgress = (task: Task) => {
     if (task.subtasks.length === 0) return null;
     const completed = task.subtasks.filter(st => st.completed).length;
     const total = task.subtasks.length;
@@ -400,12 +504,11 @@ const PersonalTaskBoard = () => {
   const pendingTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
 
-  const TaskCard = ({ task }: { task: PersonalTask }) => {
+  const TaskCard = ({ task }: { task: Task }) => {
     const isExpanded = expandedTasks.has(task.id);
     const progress = getSubtaskProgress(task);
     const isEditingTask = editingTaskId === task.id;
     
-    // Refs para inputs no controlados
     const notesRef = useRef<HTMLTextAreaElement>(null);
     const subtaskInputRef = useRef<HTMLInputElement>(null);
 
@@ -419,12 +522,6 @@ const PersonalTaskBoard = () => {
       >
         {/* Header de la tarea */}
         <div className="flex items-start gap-3">
-          <Checkbox
-            checked={task.completed}
-            onCheckedChange={() => toggleTaskComplete(task.id)}
-            className="mt-1"
-          />
-          
           <div className="flex-1 space-y-2">
             {/* Nombre de la tarea (editable) */}
             {isEditingTask ? (
@@ -488,21 +585,21 @@ const PersonalTaskBoard = () => {
 
             {/* Indicadores */}
             <div className="flex items-center gap-2 text-xs">
+              
               {task.subtasks.length > 0 && (
                 <span className="text-gray-400">
-                  {task.subtasks.length} subtarea{task.subtasks.length !== 1 ? 's' : ''}
+                  • {task.subtasks.length} subtarea{task.subtasks.length !== 1 ? 's' : ''}
                 </span>
               )}
               {task.notes && (
                 <span className="flex items-center gap-1 text-yellow-400">
-                  <StickyNote className="h-3 w-3" />
-                  Tiene notas
+                  • <StickyNote className="h-3 w-3" /> Notas
                 </span>
               )}
             </div>
           </div>
 
-          {/* Botones de acción */}
+          {/* Botones de acción - CHECKBOX A LA DERECHA */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <Button
               variant="ghost"
@@ -520,13 +617,18 @@ const PersonalTaskBoard = () => {
             >
               <Trash2 className="h-4 w-4" />
             </Button>
+            <Checkbox
+              checked={task.completed}
+              onCheckedChange={() => toggleTaskComplete(task.id)}
+              className="ml-1"
+            />
           </div>
         </div>
 
         {/* Detalles expandidos */}
         {isExpanded && (
-          <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-[#2a2a2a]">
-            {/* Notas - INPUT NO CONTROLADO */}
+          <div className="ml-0 mt-3 space-y-3 pl-3 border-l-2 border-[#2a2a2a]">
+            {/* Notas */}
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
                 <StickyNote className="h-3 w-3" />
@@ -534,7 +636,7 @@ const PersonalTaskBoard = () => {
               </label>
               <textarea
                 ref={notesRef}
-                key={`notes-${task.id}-${lastLoadRef.current}`} // Key único para resetear
+                key={`notes-${task.id}-${lastLoadRef.current}`}
                 defaultValue={task.notes}
                 onBlur={(e) => {
                   updateTaskNotes(task.id, e.target.value);
@@ -550,7 +652,6 @@ const PersonalTaskBoard = () => {
                 Subtareas
               </label>
               
-              {/* Lista de subtareas */}
               {task.subtasks.length > 0 && (
                 <div className="space-y-2 mb-2">
                   {task.subtasks.map(subtask => (
@@ -623,7 +724,7 @@ const PersonalTaskBoard = () => {
                 </div>
               )}
 
-              {/* Agregar nueva subtarea - INPUT NO CONTROLADO */}
+              {/* Agregar nueva subtarea */}
               <div className="flex gap-2">
                 <input
                   ref={subtaskInputRef}
@@ -658,93 +759,122 @@ const PersonalTaskBoard = () => {
     );
   };
 
+  const activeTask = tasks.find(t => t.id === activeId);
+
   return (
-    <div className="space-y-6">
-      {/* Header con input */}
-      <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-white">Mis Tareas Personales</CardTitle>
-          <p className="text-xs text-gray-400 mt-1">
-            🔒 Privadas • 📝 Con subtareas y notas • ✏️ Editables
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            <Input
-              placeholder="¿Qué necesitas hacer?"
-              value={newTaskText}
-              onChange={(e) => setNewTaskText(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && !isLoading && addTask()}
-              className="bg-white"
-              disabled={isLoading}
-            />
-            <Button
-              onClick={addTask}
-              disabled={isLoading}
-              className="bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black flex-shrink-0"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              {isLoading ? "Guardando..." : "Agregar"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tablero Horizontal */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Columna: En Proceso */}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="space-y-6">
+        {/* Header con input */}
         <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-white text-lg flex items-center gap-2">
-                En Proceso
-                <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
-                  {pendingTasks.length}
-                </span>
-              </CardTitle>
-            </div>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-white">Mis Tareas Personales</CardTitle>
+            <p className="text-xs text-gray-400 mt-1">
+              🔒 Privadas • 📝 Con subtareas y notas • 🔄 Arrastra para reorganizar
+            </p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2 max-h-[700px] overflow-y-auto">
-              {pendingTasks.length === 0 ? (
-                <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
-                  <p>No hay tareas pendientes</p>
-                  <p className="text-xs text-gray-600 mt-1">¡Excelente! 🎉</p>
-                </div>
-              ) : (
-                pendingTasks.map(task => <TaskCard key={task.id} task={task} />)
-              )}
+            <div className="flex gap-2">
+              <Input
+                placeholder="¿Qué necesitas hacer?"
+                value={newTaskText}
+                onChange={(e) => setNewTaskText(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && !isLoading && addTask()}
+                className="bg-white"
+                disabled={isLoading}
+              />
+              <Button
+                onClick={addTask}
+                disabled={isLoading}
+                className="bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black flex-shrink-0"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {isLoading ? "Guardando..." : "Agregar"}
+              </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Columna: Finalizadas */}
-        <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-white text-lg flex items-center gap-2">
-                Finalizadas
-                <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">
-                  {completedTasks.length}
-                </span>
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 max-h-[700px] overflow-y-auto">
-              {completedTasks.length === 0 ? (
-                <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
-                  <p>Aún no has completado tareas</p>
+        {/* Tablero Horizontal */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Columna: En Proceso */}
+          <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-white text-lg flex items-center gap-2">
+                  En Proceso
+                  <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
+                    {pendingTasks.length}
+                  </span>
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <SortableContext items={pendingTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2 max-h-[700px] overflow-y-auto">
+                  {pendingTasks.length === 0 ? (
+                    <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
+                      <p>No hay tareas pendientes</p>
+                      <p className="text-xs text-gray-600 mt-1">¡Excelente! 🎉</p>
+                    </div>
+                  ) : (
+                    pendingTasks.map(task => (
+                      <SortableTaskCard key={task.id} task={task}>
+                        <TaskCard task={task} />
+                      </SortableTaskCard>
+                    ))
+                  )}
                 </div>
-              ) : (
-                completedTasks.map(task => <TaskCard key={task.id} task={task} />)
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </SortableContext>
+            </CardContent>
+          </Card>
+
+          {/* Columna: Finalizadas */}
+          <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-white text-lg flex items-center gap-2">
+                  Finalizadas
+                  <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">
+                    {completedTasks.length}
+                  </span>
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <SortableContext items={completedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2 max-h-[700px] overflow-y-auto">
+                  {completedTasks.length === 0 ? (
+                    <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
+                      <p>Aún no hay tareas completadas</p>
+                    </div>
+                  ) : (
+                    completedTasks.map(task => (
+                      <SortableTaskCard key={task.id} task={task}>
+                        <TaskCard task={task} />
+                      </SortableTaskCard>
+                    ))
+                  )}
+                </div>
+              </SortableContext>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+
+      <DragOverlay>
+        {activeTask ? (
+          <div className="bg-[#0f0f0f] border-[#2a2a2a] border rounded-lg p-3 shadow-lg opacity-90 cursor-grabbing">
+            <p className="text-sm text-gray-200">{activeTask.text}</p>
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 };
 
-export default PersonalTaskBoard;
+export default TaskManager;

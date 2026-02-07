@@ -2,11 +2,26 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, ArrowUp, ArrowDown, StickyNote } from "lucide-react";
+import { Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronRight, StickyNote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Subtask {
   id: string;
@@ -17,138 +32,158 @@ interface Subtask {
 interface Task {
   id: string;
   text: string;
-  completed: boolean;
+  notes: string;
   subtasks: Subtask[];
-  expanded: boolean;
+  completed: boolean;
   created_by: string;
   created_at: string;
-  display_order: number;
-  notes: string;
+  order?: number;
+}
+
+// Componente de tarea arrastrable
+function SortableTaskCard({ task, children }: { task: Task; children: React.ReactNode }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
 }
 
 const TaskManager = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
-  const [taskNotes, setTaskNotes] = useState<{ [key: string]: string }>({});
   const [currentUser, setCurrentUser] = useState("");
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'realtime' | 'polling'>('connecting');
+  const [isLoading, setIsLoading] = useState(false);
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState("");
+  const [activeId, setActiveId] = useState<string | null>(null);
+  
+  const lastLoadRef = useRef<number>(0);
   const { toast } = useToast();
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
-    
-    console.log('🚀 INICIANDO TaskManager');
     loadTasks();
 
-    const channel = supabase
-      .channel('tasks-changes', {
-        config: { broadcast: { self: true } }
-      })
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        (payload) => {
-          console.log('🔥 Cambio recibido:', payload.eventType);
-          handleRealtimeUpdate(payload);
-        }
-      )
-      .subscribe((status) => {
-        console.log('📊 Estado:', status);
-        
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime activo');
-          setConnectionStatus('realtime');
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-          }
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          console.warn('⚠️ Usando polling');
-          setConnectionStatus('polling');
-          startPolling();
-        }
-      });
-
-    const timeout = setTimeout(() => {
-      if (connectionStatus === 'connecting') {
-        setConnectionStatus('polling');
-        startPolling();
-      }
-    }, 5000);
-
-    return () => {
-      clearTimeout(timeout);
-      supabase.removeChannel(channel);
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, []);
-
-  const startPolling = () => {
-    if (pollingIntervalRef.current) return;
-    pollingIntervalRef.current = setInterval(() => {
+    const interval = setInterval(() => {
       loadTasks();
-    }, 3000);
-  };
+    }, 10000);
 
-  const handleRealtimeUpdate = (payload: any) => {
-    if (payload.eventType === 'INSERT') {
-      const newTask = {
-        ...payload.new,
-        subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
-        expanded: false,
-        notes: payload.new.notes || ''
-      };
-      setTasks(prev => {
-        if (prev.some(t => t.id === newTask.id)) return prev;
-        return [newTask, ...prev].sort((a, b) => a.display_order - b.display_order);
-      });
-    } else if (payload.eventType === 'UPDATE') {
-      setTasks(prev => prev.map(task => {
-        if (task.id === payload.new.id) {
-          return {
-            ...payload.new,
-            subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
-            expanded: task.expanded,
-            notes: payload.new.notes || ''
-          };
-        }
-        return task;
-      }).sort((a, b) => a.display_order - b.display_order));
-    } else if (payload.eventType === 'DELETE') {
-      setTasks(prev => prev.filter(task => task.id !== payload.old.id));
-    }
-  };
+    return () => clearInterval(interval);
+  }, []);
 
   const loadTasks = async () => {
     try {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .order('display_order', { ascending: true });
+        .order('order', { ascending: true })
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error("❌ Error:", error);
+        console.error("Error al cargar tareas:", error);
         return;
       }
 
-      setTasks((prevTasks) => {
-        const expandedMap = new Map(prevTasks.map(t => [t.id, t.expanded]));
-        
-        return (data || []).map(task => ({
-          ...task,
-          subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
-          expanded: expandedMap.get(task.id) ?? false,
-          notes: task.notes || ''
-        }));
-      });
+      const tasksWithDefaults = (data || []).map(task => ({
+        ...task,
+        notes: task.notes || "",
+        subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+        order: task.order || 0
+      }));
+
+      setTasks(tasksWithDefaults);
+      lastLoadRef.current = Date.now();
     } catch (err) {
-      console.error("💥 Error:", err);
+      console.error("Error inesperado:", err);
+    }
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || active.id === over.id) return;
+
+    const activeTask = tasks.find(t => t.id === active.id);
+    const overTask = tasks.find(t => t.id === over.id);
+
+    if (!activeTask || !overTask) return;
+
+    // Si se mueve entre columnas (pendiente <-> completada)
+    if (activeTask.completed !== overTask.completed) {
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({ completed: overTask.completed })
+          .eq('id', activeTask.id);
+
+        if (!error) {
+          await loadTasks();
+        }
+      } catch (err) {
+        console.error("Error:", err);
+      }
+    } else {
+      // Reordenar dentro de la misma columna
+      const taskList = tasks.filter(t => t.completed === activeTask.completed);
+      const oldIndex = taskList.findIndex(t => t.id === active.id);
+      const newIndex = taskList.findIndex(t => t.id === over.id);
+
+      if (oldIndex !== newIndex) {
+        const reordered = [...taskList];
+        const [removed] = reordered.splice(oldIndex, 1);
+        reordered.splice(newIndex, 0, removed);
+
+        // Actualizar órdenes
+        const updates = reordered.map((task, index) => ({
+          id: task.id,
+          order: index
+        }));
+
+        try {
+          for (const update of updates) {
+            await supabase
+              .from('tasks')
+              .update({ order: update.order })
+              .eq('id', update.id);
+          }
+          await loadTasks();
+        } catch (err) {
+          console.error("Error:", err);
+        }
+      }
     }
   };
 
@@ -162,116 +197,109 @@ const TaskManager = () => {
       return;
     }
 
-    // Calcular el siguiente orden (el más alto + 1)
-    const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.display_order)) : 0;
+    if (isLoading) return;
+    setIsLoading(true);
 
     const newTask: Task = {
-      id: `${Date.now()}-${Math.random()}`,
+      id: `task_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       text: newTaskText,
-      completed: false,
+      notes: "",
       subtasks: [],
-      expanded: false,
+      completed: false,
       created_by: currentUser,
       created_at: new Date().toISOString(),
-      display_order: maxOrder + 1,
-      notes: ''
+      order: 0
     };
 
-    setTasks(prev => [...prev, newTask].sort((a, b) => a.display_order - b.display_order));
-    setNewTaskText("");
-    setShowAddTask(false);
-
     try {
-      const { error } = await supabase.from('tasks').insert([newTask]);
+      const { error } = await supabase
+        .from('tasks')
+        .insert([newTask])
+        .select();
       
       if (error) {
-        console.error("❌ Error:", error);
-        setTasks(prev => prev.filter(t => t.id !== newTask.id));
+        console.error("Error:", error);
         toast({
           title: "Error",
-          description: "No se pudo crear la tarea",
+          description: error.message,
           variant: "destructive"
+        });
+      } else {
+        setNewTaskText("");
+        await loadTasks();
+        toast({
+          title: "✅ Tarea creada",
+          description: "La tarea se ha agregado",
         });
       }
     } catch (err) {
-      console.error("💥 Error:", err);
-      setTasks(prev => prev.filter(t => t.id !== newTask.id));
+      console.error("Error:", err);
+      toast({
+        title: "Error",
+        description: "Ocurrió un error al crear la tarea",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const moveTask = async (taskId: string, direction: 'up' | 'down') => {
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
-    if (taskIndex === -1) return;
-    
-    if (direction === 'up' && taskIndex === 0) return; // Ya está al principio
-    if (direction === 'down' && taskIndex === tasks.length - 1) return; // Ya está al final
+  const updateTaskText = async (taskId: string, newText: string) => {
+    if (!newText.trim()) {
+      toast({
+        title: "Campo vacío",
+        description: "El nombre de la tarea no puede estar vacío",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    const targetIndex = direction === 'up' ? taskIndex - 1 : taskIndex + 1;
-    const newTasks = [...tasks];
-    
-    // Swap
-    [newTasks[taskIndex], newTasks[targetIndex]] = [newTasks[targetIndex], newTasks[taskIndex]];
-    
-    // Actualizar display_order
-    const updatedTasks = newTasks.map((task, index) => ({
-      ...task,
-      display_order: index
-    }));
-
-    setTasks(updatedTasks);
-
-    // Guardar en DB
     try {
-      const updates = [
-        {
-          id: updatedTasks[taskIndex].id,
-          display_order: taskIndex
-        },
-        {
-          id: updatedTasks[targetIndex].id,
-          display_order: targetIndex
-        }
-      ];
+      const { error } = await supabase
+        .from('tasks')
+        .update({ text: newText })
+        .eq('id', taskId);
 
-      for (const update of updates) {
-        await supabase
-          .from('tasks')
-          .update({ display_order: update.display_order })
-          .eq('id', update.id);
+      if (error) {
+        console.error("Error:", error);
+        toast({
+          title: "Error",
+          description: "No se pudo actualizar la tarea",
+          variant: "destructive"
+        });
+      } else {
+        await loadTasks();
+        setEditingTaskId(null);
+        toast({
+          title: "✅ Actualizado",
+          description: "El nombre de la tarea se actualizó",
+        });
       }
     } catch (err) {
-      console.error("💥 Error:", err);
-      loadTasks(); // Recargar si falla
+      console.error("Error:", err);
     }
   };
 
   const updateTaskNotes = async (taskId: string, notes: string) => {
-    // Actualización optimista
-    setTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, notes } : t
-    ));
-
     try {
       const { error } = await supabase
         .from('tasks')
         .update({ notes })
         .eq('id', taskId);
 
-      if (error) {
-        console.error("❌ Error:", error);
-        loadTasks();
+      if (!error) {
+        console.log("✅ Notas guardadas");
       }
     } catch (err) {
-      console.error("💥 Error:", err);
+      console.error("Error:", err);
     }
   };
 
-  const addSubtask = async (taskId: string) => {
-    const subtaskText = newSubtaskText[taskId]?.trim();
-    if (!subtaskText) {
+  const addSubtask = async (taskId: string, subtaskText: string) => {
+    if (!subtaskText.trim()) {
       toast({
         title: "Campo vacío",
-        description: "Por favor ingresa un texto para la subtarea",
+        description: "Ingresa un texto para la subtarea",
         variant: "destructive"
       });
       return;
@@ -281,17 +309,12 @@ const TaskManager = () => {
     if (!task) return;
 
     const newSubtask: Subtask = {
-      id: `${Date.now()}-${Math.random()}`,
+      id: `subtask_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       text: subtaskText,
       completed: false
     };
 
     const updatedSubtasks = [...task.subtasks, newSubtask];
-
-    setTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t
-    ));
-    setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
 
     try {
       const { error } = await supabase
@@ -300,45 +323,55 @@ const TaskManager = () => {
         .eq('id', taskId);
 
       if (error) {
-        console.error("❌ Error:", error);
-        setTasks(prev => prev.map(t => 
-          t.id === taskId ? { ...t, subtasks: task.subtasks } : t
-        ));
+        console.error("Error:", error);
+        toast({
+          title: "Error",
+          description: "No se pudo crear la subtarea",
+          variant: "destructive"
+        });
+      } else {
+        await loadTasks();
       }
     } catch (err) {
-      console.error("💥 Error:", err);
+      console.error("Error:", err);
     }
   };
 
-  const toggleTaskComplete = async (taskId: string) => {
+  const updateSubtaskText = async (taskId: string, subtaskId: string, newText: string) => {
+    if (!newText.trim()) {
+      toast({
+        title: "Campo vacío",
+        description: "El nombre de la subtarea no puede estar vacío",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const newCompleted = !task.completed;
-    const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
-
-    setTasks(prev => prev.map(t => 
-      t.id === taskId 
-        ? { ...t, completed: newCompleted, subtasks: updatedSubtasks }
-        : t
-    ));
+    const updatedSubtasks = task.subtasks.map(st =>
+      st.id === subtaskId ? { ...st, text: newText } : st
+    );
 
     try {
       const { error } = await supabase
         .from('tasks')
-        .update({ completed: newCompleted, subtasks: updatedSubtasks })
+        .update({ subtasks: updatedSubtasks })
         .eq('id', taskId);
 
       if (error) {
-        console.error("❌ Error:", error);
-        setTasks(prev => prev.map(t => 
-          t.id === taskId 
-            ? { ...t, completed: task.completed, subtasks: task.subtasks }
-            : t
-        ));
+        console.error("Error:", error);
+      } else {
+        await loadTasks();
+        setEditingSubtaskId(null);
+        toast({
+          title: "✅ Actualizado",
+          description: "El nombre de la subtarea se actualizó",
+        });
       }
     } catch (err) {
-      console.error("💥 Error:", err);
+      console.error("Error:", err);
     }
   };
 
@@ -350,48 +383,25 @@ const TaskManager = () => {
       st.id === subtaskId ? { ...st, completed: !st.completed } : st
     );
 
-    const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
-
-    setTasks(prev => prev.map(t => 
-      t.id === taskId 
-        ? { ...t, subtasks: updatedSubtasks, completed: allSubtasksComplete }
-        : t
-    ));
+    const allSubtasksComplete = updatedSubtasks.length > 0 && 
+      updatedSubtasks.every(st => st.completed);
 
     try {
       const { error } = await supabase
         .from('tasks')
-        .update({ subtasks: updatedSubtasks, completed: allSubtasksComplete })
+        .update({ 
+          subtasks: updatedSubtasks,
+          completed: allSubtasksComplete 
+        })
         .eq('id', taskId);
 
       if (error) {
-        console.error("❌ Error:", error);
+        console.error("Error:", error);
+      } else {
+        await loadTasks();
       }
     } catch (err) {
-      console.error("💥 Error:", err);
-    }
-  };
-
-  const deleteTask = async (taskId: string) => {
-    const taskToDelete = tasks.find(t => t.id === taskId);
-    if (!taskToDelete) return;
-
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-
-    try {
-      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-      
-      if (error) {
-        console.error("❌ Error:", error);
-        setTasks(prev => [...prev, taskToDelete]);
-        toast({
-          title: "Error",
-          description: "No se pudo eliminar la tarea",
-          variant: "destructive"
-        });
-      }
-    } catch (err) {
-      console.error("💥 Error:", err);
+      console.error("Error:", err);
     }
   };
 
@@ -399,12 +409,7 @@ const TaskManager = () => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const oldSubtasks = task.subtasks;
     const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
-
-    setTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t
-    ));
 
     try {
       const { error } = await supabase
@@ -413,22 +418,79 @@ const TaskManager = () => {
         .eq('id', taskId);
 
       if (error) {
-        console.error("❌ Error:", error);
-        setTasks(prev => prev.map(t => 
-          t.id === taskId ? { ...t, subtasks: oldSubtasks } : t
-        ));
+        console.error("Error:", error);
+      } else {
+        await loadTasks();
+        toast({
+          title: "Subtarea eliminada",
+          description: "La subtarea se eliminó correctamente",
+        });
       }
     } catch (err) {
-      console.error("💥 Error:", err);
+      console.error("Error:", err);
+    }
+  };
+
+  const toggleTaskComplete = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const newCompleted = !task.completed;
+    const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ 
+          completed: newCompleted,
+          subtasks: updatedSubtasks 
+        })
+        .eq('id', taskId);
+
+      if (error) {
+        console.error("Error:", error);
+      } else {
+        await loadTasks();
+      }
+    } catch (err) {
+      console.error("Error:", err);
+    }
+  };
+
+  const deleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+      
+      if (error) {
+        console.error("Error:", error);
+        toast({
+          title: "Error",
+          description: "No se pudo eliminar la tarea",
+          variant: "destructive"
+        });
+      } else {
+        await loadTasks();
+        toast({
+          title: "Tarea eliminada",
+          description: "La tarea se eliminó correctamente",
+        });
+      }
+    } catch (err) {
+      console.error("Error:", err);
     }
   };
 
   const toggleExpanded = (taskId: string) => {
-    setTasks(prevTasks => 
-      prevTasks.map(task =>
-        task.id === taskId ? { ...task, expanded: !task.expanded } : task
-      )
-    );
+    const newExpanded = new Set(expandedTasks);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
+    }
+    setExpandedTasks(newExpanded);
   };
 
   const getSubtaskProgress = (task: Task) => {
@@ -442,169 +504,253 @@ const TaskManager = () => {
   const pendingTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
 
-  const renderTask = (task: Task, canMoveUp: boolean, canMoveDown: boolean) => {
+  const TaskCard = ({ task }: { task: Task }) => {
+    const isExpanded = expandedTasks.has(task.id);
     const progress = getSubtaskProgress(task);
-    const hasNotes = task.notes && task.notes.trim().length > 0;
+    const isEditingTask = editingTaskId === task.id;
     
+    const notesRef = useRef<HTMLTextAreaElement>(null);
+    const subtaskInputRef = useRef<HTMLInputElement>(null);
+
     return (
       <div
-        key={task.id}
         className={`border rounded-lg p-3 transition-all ${
           task.completed 
-            ? "bg-green-900/20 border-green-600" 
-            : "bg-gray-800 border-gray-600"
+            ? "bg-[#1a1a1a] border-[#2a2a2a]" 
+            : "bg-[#0f0f0f] border-[#2a2a2a] hover:border-[#3a3a3a]"
         }`}
       >
+        {/* Header de la tarea */}
         <div className="flex items-start gap-3">
-          <Checkbox
-            checked={task.completed}
-            onCheckedChange={() => toggleTaskComplete(task.id)}
-            className="mt-1"
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className={`text-white ${task.completed ? "font-semibold" : ""}`}>
-                {task.text}
-              </p>
-              {task.completed && (
-                <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0" />
-              )}
-              {hasNotes && !task.expanded && (
-                <StickyNote className="h-4 w-4 text-yellow-400 flex-shrink-0" />
-              )}
-            </div>
-            <div className="flex items-center gap-3 mt-1">
-              <p className="text-xs text-gray-400">
-                Por: {task.created_by} • {new Date(task.created_at).toLocaleDateString()}
-              </p>
-              {!task.expanded && progress && (
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-[#F7DC6F] transition-all duration-300"
-                      style={{ width: `${progress.percentage}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-gray-400">
-                    {progress.completed}/{progress.total}
-                  </span>
+          <div className="flex-1 space-y-2">
+            {/* Nombre de la tarea (editable) */}
+            {isEditingTask ? (
+              <div className="flex gap-2">
+                <Input
+                  value={editingText}
+                  onChange={(e) => setEditingText(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") updateTaskText(task.id, editingText);
+                  }}
+                  className="bg-white text-sm h-8"
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  onClick={() => updateTaskText(task.id, editingText)}
+                  className="h-8 bg-green-600 hover:bg-green-700"
+                >
+                  <Save className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditingTaskId(null)}
+                  className="h-8"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <p className={`text-sm flex-1 ${task.completed ? "line-through text-gray-500" : "text-gray-200"}`}>
+                  {task.text}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditingTaskId(task.id);
+                    setEditingText(task.text);
+                  }}
+                  className="h-6 w-6 p-0 text-blue-400 hover:text-blue-300"
+                >
+                  <Edit2 className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+
+            {/* Progreso de subtareas */}
+            {progress && (
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <div className="flex-1 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-green-500 transition-all" 
+                    style={{ width: `${progress.percentage}%` }}
+                  />
                 </div>
+                <span>{progress.completed}/{progress.total}</span>
+              </div>
+            )}
+
+            {/* Indicadores */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-400">Por: {task.created_by}</span>
+              {task.subtasks.length > 0 && (
+                <span className="text-gray-400">
+                  • {task.subtasks.length} subtarea{task.subtasks.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              {task.notes && (
+                <span className="flex items-center gap-1 text-yellow-400">
+                  • <StickyNote className="h-3 w-3" /> Notas
+                </span>
               )}
             </div>
           </div>
-          <div className="flex gap-1 flex-shrink-0">
-            {/* Botones de ordenar */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => moveTask(task.id, 'up')}
-              disabled={!canMoveUp}
-              className="h-8 w-8 p-0 text-gray-400 hover:text-white disabled:opacity-30"
-              title="Mover arriba"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => moveTask(task.id, 'down')}
-              disabled={!canMoveDown}
-              className="h-8 w-8 p-0 text-gray-400 hover:text-white disabled:opacity-30"
-              title="Mover abajo"
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
+
+          {/* Botones de acción - CHECKBOX A LA DERECHA */}
+          <div className="flex items-center gap-1 flex-shrink-0">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => toggleExpanded(task.id)}
-              className="h-8 w-8 p-0 text-gray-400 hover:text-white"
+              className="h-6 w-6 p-0 text-gray-400 hover:text-gray-200"
             >
-              {task.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => deleteTask(task.id)}
-              className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+              className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
+            <Checkbox
+              checked={task.completed}
+              onCheckedChange={() => toggleTaskComplete(task.id)}
+              className="ml-1"
+            />
           </div>
         </div>
 
-        {task.expanded && (
-          <div className="ml-8 mt-3 space-y-3">
+        {/* Detalles expandidos */}
+        {isExpanded && (
+          <div className="ml-0 mt-3 space-y-3 pl-3 border-l-2 border-[#2a2a2a]">
             {/* Notas */}
-            <div className="border-b border-gray-700 pb-3">
-              <div className="flex items-center gap-2 mb-2">
-                <StickyNote className="h-4 w-4 text-yellow-400" />
-                <label className="text-xs font-semibold text-gray-300 uppercase">Notas</label>
-              </div>
-              <Textarea
-                placeholder="Agrega notas, comentarios o detalles adicionales..."
-                value={taskNotes[task.id] ?? task.notes}
-                onChange={(e) => {
-                  const newNotes = e.target.value;
-                  setTaskNotes({ ...taskNotes, [task.id]: newNotes });
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
+                <StickyNote className="h-3 w-3" />
+                Notas (se guardan al salir del campo)
+              </label>
+              <textarea
+                ref={notesRef}
+                key={`notes-${task.id}-${lastLoadRef.current}`}
+                defaultValue={task.notes}
+                onBlur={(e) => {
+                  updateTaskNotes(task.id, e.target.value);
                 }}
-                onBlur={() => {
-                  const notes = taskNotes[task.id] ?? task.notes;
-                  if (notes !== task.notes) {
-                    updateTaskNotes(task.id, notes);
-                  }
-                }}
-                className="bg-white text-sm min-h-[60px] resize-none"
+                placeholder="Agrega notas o recordatorios..."
+                className="w-full bg-white text-sm min-h-[60px] p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
               />
             </div>
 
             {/* Subtareas */}
             <div>
-              <label className="text-xs font-semibold text-gray-300 uppercase block mb-2">
+              <label className="text-xs text-gray-400 mb-2 block">
                 Subtareas
               </label>
-              <div className="space-y-2">
-                {task.subtasks.map(subtask => (
-                  <div key={subtask.id} className="flex items-center gap-2">
-                    <Checkbox
-                      checked={subtask.completed}
-                      onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
-                      className="h-4 w-4"
-                    />
-                    <p className={`text-sm flex-1 ${subtask.completed ? "text-green-400 font-medium" : "text-gray-300"}`}>
-                      {subtask.text}
-                    </p>
-                    {subtask.completed && <CheckCircle2 className="h-3 w-3 text-green-400" />}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteSubtask(task.id, subtask.id)}
-                      className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-
-                <div className="flex gap-2 pt-2">
-                  <Input
-                    placeholder="Agregar subtarea..."
-                    value={newSubtaskText[task.id] || ""}
-                    onChange={(e) =>
-                      setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
-                    }
-                    onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
-                    className="bg-white text-sm h-8"
-                  />
-                  <Button
-                    onClick={() => addSubtask(task.id)}
-                    size="sm"
-                    className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Agregar
-                  </Button>
+              
+              {task.subtasks.length > 0 && (
+                <div className="space-y-2 mb-2">
+                  {task.subtasks.map(subtask => (
+                    <div key={subtask.id} className="flex items-center gap-2 bg-[#1a1a1a] p-2 rounded border border-[#2a2a2a]">
+                      <Checkbox
+                        checked={subtask.completed}
+                        onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
+                        className="h-3.5 w-3.5"
+                      />
+                      
+                      {editingSubtaskId === subtask.id ? (
+                        <div className="flex gap-2 flex-1">
+                          <Input
+                            value={editingSubtaskText}
+                            onChange={(e) => setEditingSubtaskText(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter") {
+                                updateSubtaskText(task.id, subtask.id, editingSubtaskText);
+                              }
+                            }}
+                            className="bg-white text-xs h-7"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => updateSubtaskText(task.id, subtask.id, editingSubtaskText)}
+                            className="h-7 px-2 bg-green-600 hover:bg-green-700"
+                          >
+                            <Save className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingSubtaskId(null)}
+                            className="h-7 px-2"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className={`text-xs flex-1 ${
+                            subtask.completed ? "line-through text-gray-500" : "text-gray-300"
+                          }`}>
+                            {subtask.text}
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingSubtaskId(subtask.id);
+                              setEditingSubtaskText(subtask.text);
+                            }}
+                            className="h-6 w-6 p-0 text-blue-400 hover:text-blue-300"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteSubtask(task.id, subtask.id)}
+                            className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
+              )}
+
+              {/* Agregar nueva subtarea */}
+              <div className="flex gap-2">
+                <input
+                  ref={subtaskInputRef}
+                  type="text"
+                  placeholder="Agregar subtarea..."
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && subtaskInputRef.current) {
+                      addSubtask(task.id, subtaskInputRef.current.value);
+                      subtaskInputRef.current.value = "";
+                    }
+                  }}
+                  className="flex-1 bg-white text-sm h-8 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F]"
+                />
+                <Button
+                  onClick={() => {
+                    if (subtaskInputRef.current) {
+                      addSubtask(task.id, subtaskInputRef.current.value);
+                      subtaskInputRef.current.value = "";
+                    }
+                  }}
+                  size="sm"
+                  className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Agregar
+                </Button>
               </div>
             </div>
           </div>
@@ -613,113 +759,121 @@ const TaskManager = () => {
     );
   };
 
+  const activeTask = tasks.find(t => t.id === activeId);
+
   return (
-    <Card className="mb-6 bg-[#161A15] border-[#161A15]">
-      <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className="text-white">Tareas Activas</CardTitle>
-        {!showAddTask ? (
-          <Button 
-            onClick={() => setShowAddTask(true)}
-            size="sm"
-            variant="ghost"
-            className="text-gray-400 hover:text-white hover:bg-gray-800"
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Nueva tarea
-          </Button>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="space-y-6">
+        {/* Header con input */}
+        <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-white">Tareas de Operaciones</CardTitle>
+            <p className="text-xs text-gray-400 mt-1">
+              👥 Compartidas • 📝 Con subtareas y notas • 🔄 Arrastra para reorganizar
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                placeholder="¿Qué necesita hacer el equipo?"
+                value={newTaskText}
+                onChange={(e) => setNewTaskText(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && !isLoading && addTask()}
+                className="bg-white"
+                disabled={isLoading}
+              />
+              <Button
+                onClick={addTask}
+                disabled={isLoading}
+                className="bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black flex-shrink-0"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {isLoading ? "Guardando..." : "Agregar"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tablero Horizontal */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Columna: En Proceso */}
+          <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-white text-lg flex items-center gap-2">
+                  En Proceso
+                  <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
+                    {pendingTasks.length}
+                  </span>
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <SortableContext items={pendingTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2 max-h-[700px] overflow-y-auto">
+                  {pendingTasks.length === 0 ? (
+                    <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
+                      <p>No hay tareas pendientes</p>
+                      <p className="text-xs text-gray-600 mt-1">¡Excelente! 🎉</p>
+                    </div>
+                  ) : (
+                    pendingTasks.map(task => (
+                      <SortableTaskCard key={task.id} task={task}>
+                        <TaskCard task={task} />
+                      </SortableTaskCard>
+                    ))
+                  )}
+                </div>
+              </SortableContext>
+            </CardContent>
+          </Card>
+
+          {/* Columna: Finalizadas */}
+          <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-white text-lg flex items-center gap-2">
+                  Finalizadas
+                  <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">
+                    {completedTasks.length}
+                  </span>
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <SortableContext items={completedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2 max-h-[700px] overflow-y-auto">
+                  {completedTasks.length === 0 ? (
+                    <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
+                      <p>Aún no hay tareas completadas</p>
+                    </div>
+                  ) : (
+                    completedTasks.map(task => (
+                      <SortableTaskCard key={task.id} task={task}>
+                        <TaskCard task={task} />
+                      </SortableTaskCard>
+                    ))
+                  )}
+                </div>
+              </SortableContext>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <DragOverlay>
+        {activeTask ? (
+          <div className="bg-[#0f0f0f] border-[#2a2a2a] border rounded-lg p-3 shadow-lg opacity-90 cursor-grabbing">
+            <p className="text-sm text-gray-200">{activeTask.text}</p>
+          </div>
         ) : null}
-      </CardHeader>
-      
-      <CardContent className="space-y-4">
-        {showAddTask && (
-          <div className="flex gap-2 pb-4 border-b border-gray-700">
-            <Input
-              placeholder="Escribe la nueva tarea..."
-              value={newTaskText}
-              onChange={(e) => setNewTaskText(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && addTask()}
-              className="bg-white flex-1 border-gray-300 focus-visible:ring-0 focus-visible:ring-offset-0"
-              autoFocus
-            />
-            <Button 
-              onClick={addTask} 
-              size="sm"
-              className="flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Crear
-            </Button>
-            <Button 
-              onClick={() => {
-                setShowAddTask(false);
-                setNewTaskText("");
-              }}
-              size="sm"
-              variant="outline"
-              className="flex-shrink-0"
-            >
-              Cancelar
-            </Button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Pendientes</h3>
-              <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">{pendingTasks.length}</span>
-            </div>
-            <div className="space-y-3">
-              {pendingTasks.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>¡No hay tareas pendientes!</p>
-                  <p className="text-xs mt-1">Agrega una nueva tarea</p>
-                </div>
-              ) : (
-                pendingTasks.map((task, index) => 
-                  renderTask(task, index > 0, index < pendingTasks.length - 1)
-                )
-              )}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Completadas</h3>
-              <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">{completedTasks.length}</span>
-            </div>
-            <div className="space-y-3">
-              {completedTasks.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>Aún no hay tareas completadas</p>
-                </div>
-              ) : (
-                completedTasks.map((task, index) => 
-                  renderTask(task, index > 0, index < completedTasks.length - 1)
-                )
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="pt-4 border-t border-gray-700">
-          <p className="text-xs text-gray-500">
-            💡 Usa ↑↓ para reordenar • Click en → para ver notas y subtareas
-            <span className="ml-2">
-              {connectionStatus === 'connecting' && (
-                <span className="text-blue-400">🔄 Conectando...</span>
-              )}
-              {connectionStatus === 'polling' && (
-                <span className="text-yellow-400">🔄 Modo Polling</span>
-              )}
-              {connectionStatus === 'realtime' && (
-                <span className="text-green-400">⚡ Tiempo real</span>
-              )}
-            </span>
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+      </DragOverlay>
+    </DndContext>
   );
 };
 
