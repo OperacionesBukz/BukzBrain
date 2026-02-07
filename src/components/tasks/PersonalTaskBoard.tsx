@@ -697,7 +697,7 @@ const PersonalTaskBoard = () => {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white text-lg flex items-center gap-2">
-                📋 En Proceso
+                En Proceso
                 <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
                   {pendingTasks.length}
                 </span>
@@ -707,7 +707,7 @@ const PersonalTaskBoard = () => {
           <CardContent>
             <div className="space-y-2 max-h-[700px] overflow-y-auto">
               {pendingTasks.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg">
+                <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
                   <p>No hay tareas pendientes</p>
                   <p className="text-xs text-gray-600 mt-1">¡Excelente! 🎉</p>
                 </div>
@@ -723,7 +723,7 @@ const PersonalTaskBoard = () => {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white text-lg flex items-center gap-2">
-                ✅ Finalizadas
+                Finalizadas
                 <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">
                   {completedTasks.length}
                 </span>
@@ -733,7 +733,7 @@ const PersonalTaskBoard = () => {
           <CardContent>
             <div className="space-y-2 max-h-[700px] overflow-y-auto">
               {completedTasks.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg">
+                <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
                   <p>Aún no has completado tareas</p>
                 </div>
               ) : (
