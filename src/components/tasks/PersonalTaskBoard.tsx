@@ -8,9 +8,6 @@ import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, StickyNote, User
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
-// ============================================
-// TIPOS
-// ============================================
 interface Subtask {
   id: string;
   text: string;
@@ -28,9 +25,6 @@ interface PersonalTask {
   created_at: string;
 }
 
-// ============================================
-// COMPONENTE DE TAREA PERSONAL (MEMOIZADO)
-// ============================================
 interface PersonalTaskItemProps {
   task: PersonalTask;
   onToggleComplete: (taskId: string) => void;
@@ -95,11 +89,10 @@ const PersonalTaskItem = memo(({
     <div
       className={`border rounded-lg p-3 transition-all ${
         task.completed 
-          ? "dark:bg-green-900/20 dark:border-green-700/50 bg-green-50 border-green-200"
-          : "dark:bg-gray-800/50 dark:border-gray-700 dark:hover:border-gray-600 bg-gray-100 border-gray-300 hover:border-gray-400"
+          ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200"
+          : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300"
       }`}
     >
-      {/* Header - Checkbox centrado verticalmente */}
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center">
           <Checkbox 
@@ -142,10 +135,9 @@ const PersonalTaskItem = memo(({
             </div>
           </div>
           
-          {/* Barra de progreso */}
           {progress && (
             <div className="mt-2">
-              <div className="h-1.5 dark:bg-gray-700 bg-gray-300 rounded-full overflow-hidden">
+              <div className="h-1.5 dark:bg-[#3a3a3a] bg-gray-300 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-green-500 transition-all duration-300"
                   style={{ width: `${progress.percentage}%` }}
@@ -156,10 +148,8 @@ const PersonalTaskItem = memo(({
         </div>
       </div>
 
-      {/* Contenido expandido */}
       {task.expanded && (
         <div className="mt-3 pl-8 space-y-3">
-          {/* Campo de Notas */}
           <div className="space-y-1">
             <label className="text-xs dark:text-gray-400 text-gray-600 flex items-center gap-1">
               <StickyNote className="h-3 w-3" />
@@ -169,11 +159,10 @@ const PersonalTaskItem = memo(({
               placeholder="Agregar notas..."
               value={localNotes}
               onChange={(e) => handleNotesChange(e.target.value)}
-              className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-gray-50 border-gray-300 text-gray-900 text-sm min-h-[60px] resize-none"
+              className="dark:bg-[#1a1a1a] dark:border-[#3a3a3a] dark:text-white bg-gray-50 border-gray-300 text-gray-900 text-sm min-h-[60px] resize-none"
             />
           </div>
 
-          {/* Subtareas */}
           <div className="space-y-2">
             <label className="text-xs dark:text-gray-400 text-gray-600">Subtareas</label>
             {task.subtasks.map((subtask) => (
@@ -201,14 +190,13 @@ const PersonalTaskItem = memo(({
               </div>
             ))}
 
-            {/* Agregar subtarea */}
-            <div className="flex gap-2 mt-2 pt-2 dark:border-gray-700 border-gray-300 border-t">
+            <div className="flex gap-2 mt-2 pt-2 dark:border-[#3a3a3a] border-gray-300 border-t">
               <Input
                 placeholder="Agregar subtarea..."
                 value={newSubtaskText}
                 onChange={(e) => setNewSubtaskText(e.target.value)}
                 onKeyPress={handleKeyPress}
-                className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
+                className="dark:bg-[#1a1a1a] dark:border-[#3a3a3a] dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
               />
               <Button
                 onClick={handleAddSubtask}
@@ -228,9 +216,6 @@ const PersonalTaskItem = memo(({
 
 PersonalTaskItem.displayName = 'PersonalTaskItem';
 
-// ============================================
-// COMPONENTE PRINCIPAL: PersonalTasksManager
-// ============================================
 const PersonalTasksManager = () => {
   const [tasks, setTasks] = useState<PersonalTask[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
@@ -246,9 +231,6 @@ const PersonalTasksManager = () => {
     loadTasks(username);
   }, []);
 
-  // ============================================
-  // CARGAR TAREAS PERSONALES
-  // ============================================
   const loadTasks = async (username: string) => {
     try {
       console.log('📥 Cargando tareas para usuario:', username);
@@ -291,9 +273,6 @@ const PersonalTasksManager = () => {
     }
   };
 
-  // ============================================
-  // CRUD OPERATIONS
-  // ============================================
   const addTask = async () => {
     if (!newTaskText.trim()) {
       toast({
@@ -532,9 +511,6 @@ const PersonalTasksManager = () => {
     }
   }, [tasks]);
 
-  // ============================================
-  // RENDER
-  // ============================================
   const pendingTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
 
@@ -563,13 +539,13 @@ const PersonalTasksManager = () => {
       
       <CardContent className="space-y-4">
         {showAddTask && (
-          <div className="flex gap-2 pb-4 dark:border-gray-700 border-gray-300 border-b">
+          <div className="flex gap-2 pb-4 dark:border-[#3a3a3a] border-gray-300 border-b">
             <Input
               placeholder="Escribe tu tarea personal..."
               value={newTaskText}
               onChange={(e) => setNewTaskText(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addTask()}
-              className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 flex-1 focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="dark:bg-[#1a1a1a] dark:border-[#3a3a3a] dark:text-white bg-white border-gray-300 text-gray-900 flex-1 focus-visible:ring-0 focus-visible:ring-offset-0"
               autoFocus
             />
             <Button 
@@ -604,7 +580,7 @@ const PersonalTasksManager = () => {
             </div>
             <div className="space-y-3">
               {pendingTasks.length === 0 ? (
-                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
                   <p>¡No hay tareas pendientes!</p>
                   <p className="text-xs mt-1">Agrega una nueva tarea</p>
                 </div>
@@ -635,7 +611,7 @@ const PersonalTasksManager = () => {
             </div>
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
-                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
                   <p>No hay tareas completadas</p>
                   <p className="text-xs mt-1">Completa algunas tareas</p>
                 </div>

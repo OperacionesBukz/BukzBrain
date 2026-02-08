@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, StickyNote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -17,6 +18,7 @@ interface Task {
   id: string;
   text: string;
   completed: boolean;
+  notes: string;
   subtasks: Subtask[];
   expanded: boolean;
   created_by: string;
@@ -101,6 +103,7 @@ const TaskManager = () => {
     if (payload.eventType === 'INSERT') {
       const newTask = {
         ...payload.new,
+        notes: payload.new.notes || "",
         subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
         expanded: false
       };
@@ -113,6 +116,7 @@ const TaskManager = () => {
         if (task.id === payload.new.id) {
           return {
             ...payload.new,
+            notes: payload.new.notes || "",
             subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
             expanded: task.expanded
           };
@@ -141,6 +145,7 @@ const TaskManager = () => {
         
         return (data || []).map(task => ({
           ...task,
+          notes: task.notes || "",
           subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
           expanded: expandedMap.get(task.id) ?? false
         }));
@@ -164,6 +169,7 @@ const TaskManager = () => {
       id: `${Date.now()}-${Math.random()}`,
       text: newTaskText,
       completed: false,
+      notes: "",
       subtasks: [],
       expanded: false,
       created_by: currentUser,
@@ -373,6 +379,28 @@ const TaskManager = () => {
     );
   };
 
+  const updateNotes = async (taskId: string, notes: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    setTasks(prev => prev.map(t => 
+      t.id === taskId ? { ...t, notes } : t
+    ));
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ notes })
+        .eq('id', taskId);
+
+      if (error) {
+        console.error("Error al guardar notas:", error);
+      }
+    } catch (err) {
+      console.error("Error:", err);
+    }
+  };
+
   const getSubtaskProgress = (task: Task) => {
     if (task.subtasks.length === 0) return null;
     const completed = task.subtasks.filter(st => st.completed).length;
@@ -392,8 +420,8 @@ const TaskManager = () => {
         key={task.id}
         className={`border rounded-lg p-3 transition-all ${
           task.completed 
-            ? "dark:bg-green-900/20 dark:border-green-600 bg-green-50 border-green-200"
-            : "dark:bg-gray-800 dark:border-gray-600 bg-gray-100 border-gray-300"
+            ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200"
+            : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300"
         }`}
       >
         <div className="flex items-start gap-3">
@@ -415,6 +443,9 @@ const TaskManager = () => {
               <p className="text-xs dark:text-gray-400 text-gray-600">
                 Por: {task.created_by} • {new Date(task.created_at).toLocaleDateString()}
               </p>
+              {task.notes && !task.expanded && (
+                <StickyNote className="h-3 w-3 dark:text-yellow-400 text-yellow-600" />
+              )}
               {!task.expanded && progress && (
                 <div className="flex items-center gap-2">
                   <div className="w-24 h-1.5 dark:bg-gray-700 bg-gray-300 rounded-full overflow-hidden">
@@ -451,47 +482,65 @@ const TaskManager = () => {
         </div>
 
         {task.expanded && (
-          <div className="ml-8 mt-3 space-y-2">
-            {task.subtasks.map(subtask => (
-              <div key={subtask.id} className="flex items-center gap-2">
-                <Checkbox
-                  checked={subtask.completed}
-                  onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
-                  className="h-4 w-4"
+          <div className="ml-8 mt-3 space-y-3">
+            {/* NOTAS */}
+            <div className="space-y-1">
+              <label className="text-xs dark:text-gray-400 text-gray-600 flex items-center gap-1">
+                <StickyNote className="h-3 w-3" />
+                Notas
+              </label>
+              <Textarea
+                placeholder="Agregar notas..."
+                defaultValue={task.notes}
+                onChange={(e) => updateNotes(task.id, e.target.value)}
+                className="dark:bg-[#1a1a1a] dark:border-[#3a3a3a] dark:text-white bg-gray-50 border-gray-300 text-gray-900 text-sm min-h-[60px] resize-none"
+              />
+            </div>
+
+            {/* SUBTAREAS */}
+            <div className="space-y-2">
+              <label className="text-xs dark:text-gray-400 text-gray-600">Subtareas</label>
+              {task.subtasks.map(subtask => (
+                <div key={subtask.id} className="flex items-center gap-2">
+                  <Checkbox
+                    checked={subtask.completed}
+                    onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
+                    className="h-4 w-4"
+                  />
+                  <p className={`text-sm flex-1 ${subtask.completed ? "dark:text-green-400 dark:line-through text-green-600 line-through" : "dark:text-gray-300 text-gray-700"}`}>
+                    {subtask.text}
+                  </p>
+                  {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteSubtask(task.id, subtask.id)}
+                    className="h-6 w-6 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+
+              <div className="flex gap-2 mt-2 pt-2 dark:border-[#3a3a3a] border-gray-300 border-t">
+                <Input
+                  placeholder="Agregar subtarea..."
+                  value={newSubtaskText[task.id] || ""}
+                  onChange={(e) =>
+                    setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
+                  }
+                  onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
+                  className="dark:bg-[#1a1a1a] dark:border-[#3a3a3a] dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
                 />
-                <p className={`text-sm flex-1 ${subtask.completed ? "dark:text-green-400 dark:line-through text-green-600 line-through" : "dark:text-gray-300 text-gray-700"}`}>
-                  {subtask.text}
-                </p>
-                {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
                 <Button
-                  variant="ghost"
+                  onClick={() => addSubtask(task.id)}
                   size="sm"
-                  onClick={() => deleteSubtask(task.id, subtask.id)}
-                  className="h-6 w-6 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
+                  className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Plus className="h-3 w-3 mr-1" />
+                  Agregar
                 </Button>
               </div>
-            ))}
-
-            <div className="flex gap-2 mt-2 pt-2 dark:border-gray-700 border-gray-300 border-t">
-              <Input
-                placeholder="Agregar subtarea..."
-                value={newSubtaskText[task.id] || ""}
-                onChange={(e) =>
-                  setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
-                }
-                onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
-                className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
-              />
-              <Button
-                onClick={() => addSubtask(task.id)}
-                size="sm"
-                className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Agregar
-              </Button>
             </div>
           </div>
         )}
@@ -518,13 +567,13 @@ const TaskManager = () => {
       
       <CardContent className="space-y-4">
         {showAddTask && (
-          <div className="flex gap-2 pb-4 dark:border-gray-700 border-gray-300 border-b">
+          <div className="flex gap-2 pb-4 dark:border-[#3a3a3a] border-gray-300 border-b">
             <Input
               placeholder="Escribe la nueva tarea..."
               value={newTaskText}
               onChange={(e) => setNewTaskText(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addTask()}
-              className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 flex-1 focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="dark:bg-[#1a1a1a] dark:border-[#3a3a3a] dark:text-white bg-white border-gray-300 text-gray-900 flex-1 focus-visible:ring-0 focus-visible:ring-offset-0"
               autoFocus
             />
             <Button 
@@ -557,7 +606,7 @@ const TaskManager = () => {
             </div>
             <div className="space-y-3">
               {pendingTasks.length === 0 ? (
-                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
                   <p>¡No hay tareas pendientes!</p>
                   <p className="text-xs mt-1">Agrega una nueva tarea</p>
                 </div>
@@ -574,7 +623,7 @@ const TaskManager = () => {
             </div>
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
-                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
                   <p>Aún no hay tareas completadas</p>
                   <p className="text-xs mt-1">Completa algunas tareas</p>
                 </div>
@@ -585,9 +634,9 @@ const TaskManager = () => {
           </div>
         </div>
 
-        <div className="pt-4 dark:border-gray-700 border-gray-300 border-t">
+        <div className="pt-4 dark:border-[#3a3a3a] border-gray-300 border-t">
           <p className="text-xs dark:text-gray-500 text-gray-600">
-            💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
+            💡 Click en la flecha (→) para expandir y ver/agregar subtareas y notas. 
             <span className="ml-2">
               {usePolling ? (
                 <span className="dark:text-yellow-400 text-yellow-600">🔄 Modo Polling (recarga cada 3s)</span>
