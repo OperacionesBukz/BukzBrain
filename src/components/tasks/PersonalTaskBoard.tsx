@@ -95,7 +95,33 @@ const TaskManager = () => {
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
-    loadTasks();
+    
+    // Solo cargar tareas al montar el componente
+    const loadInitialTasks = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('personal_tasks')
+          .select('*')
+          .eq('created_by', username)
+          .order('order', { ascending: true })
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          const tasksWithDefaults = data.map(task => ({
+            ...task,
+            notes: task.notes || "",
+            subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+            order: task.order || 0
+          }));
+          setTasks(tasksWithDefaults);
+          lastLoadRef.current = Date.now();
+        }
+      } catch (err) {
+        console.error("Error inicial:", err);
+      }
+    };
+    
+    loadInitialTasks();
 
     const interval = setInterval(() => {
       loadTasks();
@@ -106,7 +132,7 @@ const TaskManager = () => {
       // Limpiar todos los timers pendientes
       Object.values(saveTimersRef.current).forEach(timer => clearTimeout(timer));
     };
-  }, [focusedFields]); // Dependencia para reaccionar a cambios en campos activos
+  }, []); // SIN DEPENDENCIAS - solo ejecutar una vez
 
   const loadTasks = async () => {
     // PROTECCIÓN: No recargar si hay campos activos
@@ -227,32 +253,44 @@ const TaskManager = () => {
       order: 0
     };
 
+    // OPTIMISTIC UI: Mostrar tarea inmediatamente
+    setTasks(prev => [newTask, ...prev]);
+    const textBackup = newTaskText;
+    setNewTaskText("");
+    
+    toast({
+      title: "✅ Tarea creada",
+      description: "Guardando...",
+    });
+
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('personal_tasks')
         .insert([newTask])
         .select();
       
       if (error) {
-        console.error("Error:", error);
+        console.error("❌ Error al guardar tarea:", error);
+        // REVERTIR cambio optimista
+        setTasks(prev => prev.filter(t => t.id !== newTask.id));
+        setNewTaskText(textBackup);
         toast({
-          title: "Error",
-          description: error.message,
+          title: "Error al guardar",
+          description: error.message || "Revisa tu conexión",
           variant: "destructive"
         });
       } else {
-        setNewTaskText("");
-        await loadTasks();
-        toast({
-          title: "✅ Tarea creada",
-          description: "La tarea se ha agregado",
-        });
+        console.log("✅ Tarea guardada exitosamente:", data);
+        // NO llamar loadTasks() - dejar que el polling lo maneje
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("❌ Error inesperado:", err);
+      // REVERTIR cambio optimista
+      setTasks(prev => prev.filter(t => t.id !== newTask.id));
+      setNewTaskText(textBackup);
       toast({
         title: "Error",
-        description: "Ocurrió un error al crear la tarea",
+        description: "No se pudo crear la tarea",
         variant: "destructive"
       });
     } finally {

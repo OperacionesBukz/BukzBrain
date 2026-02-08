@@ -95,7 +95,32 @@ const TaskManager = () => {
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
-    loadTasks();
+    
+    // Carga inicial
+    const loadInitialTasks = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .order('order', { ascending: true })
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          const tasksWithDefaults = data.map(task => ({
+            ...task,
+            notes: task.notes || "",
+            subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+            order: task.order || 0
+          }));
+          setTasks(tasksWithDefaults);
+          lastLoadRef.current = Date.now();
+        }
+      } catch (err) {
+        console.error("Error inicial:", err);
+      }
+    };
+    
+    loadInitialTasks();
 
     // Polling reducido a 2 segundos para actualizaciones más rápidas
     const interval = setInterval(() => {
@@ -107,7 +132,7 @@ const TaskManager = () => {
       // Limpiar todos los timers pendientes
       Object.values(saveTimersRef.current).forEach(timer => clearTimeout(timer));
     };
-  }, [focusedFields]); // Dependencia añadida
+  }, []); // SIN DEPENDENCIAS - solo ejecutar una vez
 
   const loadTasks = async () => {
     // PROTECCIÓN: No recargar si hay campos activos
