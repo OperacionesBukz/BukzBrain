@@ -1,16 +1,13 @@
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, Users } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, StickyNote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
-// ============================================
-// TIPOS
-// ============================================
 interface Subtask {
   id: string;
   text: string;
@@ -21,194 +18,18 @@ interface Task {
   id: string;
   text: string;
   completed: boolean;
+  notes: string;
   subtasks: Subtask[];
   expanded: boolean;
   created_by: string;
   created_at: string;
 }
 
-// ============================================
-// COMPONENTE DE TAREA (MEMOIZADO)
-// ============================================
-interface TaskItemProps {
-  task: Task;
-  onToggleComplete: (taskId: string) => void;
-  onToggleExpanded: (taskId: string) => void;
-  onDelete: (taskId: string) => void;
-  onToggleSubtaskComplete: (taskId: string, subtaskId: string) => void;
-  onDeleteSubtask: (taskId: string, subtaskId: string) => void;
-  onAddSubtask: (taskId: string, text: string) => void;
-}
-
-const TaskItem = memo(({
-  task,
-  onToggleComplete,
-  onToggleExpanded,
-  onDelete,
-  onToggleSubtaskComplete,
-  onDeleteSubtask,
-  onAddSubtask,
-}: TaskItemProps) => {
-  const [newSubtaskText, setNewSubtaskText] = useState("");
-
-  const handleAddSubtask = useCallback(() => {
-    if (newSubtaskText.trim()) {
-      onAddSubtask(task.id, newSubtaskText.trim());
-      setNewSubtaskText("");
-    }
-  }, [task.id, newSubtaskText, onAddSubtask]);
-
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleAddSubtask();
-    }
-  }, [handleAddSubtask]);
-
-  const progress = task.subtasks.length > 0 ? {
-    completed: task.subtasks.filter(st => st.completed).length,
-    total: task.subtasks.length,
-    percentage: Math.round((task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100)
-  } : null;
-
-  return (
-    <div
-      className={`border rounded-lg p-3 transition-all ${
-        task.completed 
-          ? "dark:bg-green-900/20 dark:border-green-700/50 bg-green-50 border-green-200"
-          : "dark:bg-gray-800/50 dark:border-gray-700 dark:hover:border-gray-600 bg-white border-gray-200 hover:border-gray-300"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center">
-          <Checkbox 
-            checked={task.completed}
-            onCheckedChange={() => onToggleComplete(task.id)}
-            className="h-5 w-5"
-          />
-        </div>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className={`font-medium ${
-                task.completed 
-                  ? "dark:text-green-400 dark:line-through text-green-600 line-through"
-                  : "dark:text-white text-gray-900"
-              }`}>
-                {task.text}
-              </p>
-              <p className="text-xs dark:text-gray-500 text-gray-600 mt-0.5">
-                Por: {task.created_by}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-              {progress && (
-                <span className="text-xs dark:text-gray-400 text-gray-600 mr-2">
-                  {progress.completed}/{progress.total}
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onToggleExpanded(task.id)}
-                className="h-7 w-7 p-0 dark:text-gray-400 dark:hover:text-white text-gray-600 hover:text-gray-900"
-              >
-                {task.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete(task.id)}
-                className="h-7 w-7 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          
-          {/* Barra de progreso */}
-          {progress && (
-            <div className="mt-2">
-              <div className="h-1.5 dark:bg-gray-700 bg-gray-300 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-blue-500 transition-all duration-300"
-                  style={{ width: `${progress.percentage}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Contenido expandido */}
-      {task.expanded && (
-        <div className="mt-3 pl-8 space-y-3">
-          {/* Subtareas */}
-          <div className="space-y-2">
-            <label className="text-xs dark:text-gray-400 text-gray-600">Subtareas</label>
-            {task.subtasks.map((subtask) => (
-              <div 
-                key={subtask.id}
-                className="flex items-center gap-2 py-1"
-              >
-                <Checkbox
-                  checked={subtask.completed}
-                  onCheckedChange={() => onToggleSubtaskComplete(task.id, subtask.id)}
-                  className="h-4 w-4"
-                />
-                <p className={`text-sm flex-1 ${
-                  subtask.completed 
-                    ? "dark:text-green-400 dark:line-through text-green-600 line-through"
-                    : "dark:text-gray-300 text-gray-700"
-                }`}>
-                  {subtask.text}
-                </p>
-                {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onDeleteSubtask(task.id, subtask.id)}
-                  className="h-6 w-6 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-
-            {/* Agregar subtarea */}
-            <div className="flex gap-2 mt-2 pt-2 dark:border-gray-700 border-gray-300 border-t">
-              <Input
-                placeholder="Agregar subtarea..."
-                value={newSubtaskText}
-                onChange={(e) => setNewSubtaskText(e.target.value)}
-                onKeyPress={handleKeyPress}
-                className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
-              />
-              <Button
-                onClick={handleAddSubtask}
-                size="sm"
-                className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Agregar
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});
-
-TaskItem.displayName = 'TaskItem';
-
-// ============================================
-// COMPONENTE PRINCIPAL: TaskManager
-// ============================================
 const TaskManager = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [showAddTask, setShowAddTask] = useState(false);
+  const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
   const [currentUser, setCurrentUser] = useState("");
   const [usePolling, setUsePolling] = useState(false);
   const { toast } = useToast();
@@ -217,17 +38,101 @@ const TaskManager = () => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
     
-    console.log('🚀 TaskManager iniciando para:', username);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🚀 INICIANDO TaskManager');
+    console.log('👤 Usuario:', username);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     loadTasks();
-  }, []);
 
-  // ============================================
-  // CARGAR TAREAS DEL EQUIPO (todas)
-  // ============================================
+    // Intentar Realtime primero
+    console.log('📡 Intentando conectar con Realtime...');
+    
+    const channel = supabase
+      .channel('tasks-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        (payload) => {
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('🔥 ¡CAMBIO RECIBIDO VÍA REALTIME!');
+          console.log('⏰ Timestamp:', new Date().toLocaleTimeString());
+          console.log('📋 Tipo:', payload.eventType);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          handleRealtimeUpdate(payload);
+        }
+      )
+      .subscribe((status, err) => {
+        console.log('📊 Estado de suscripción:', status);
+        
+        if (err) {
+          console.error('❌ Error Realtime:', err);
+          console.warn('⚠️ Cambiando a modo POLLING...');
+          setUsePolling(true);
+        }
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime ACTIVO');
+          setUsePolling(false);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('⚠️ Realtime falló, usando POLLING');
+          setUsePolling(true);
+        }
+      });
+
+    // Polling como fallback
+    let pollingInterval: NodeJS.Timeout;
+    
+    // Esperar 3 segundos para ver si Realtime se conecta
+    const pollingTimeout = setTimeout(() => {
+      if (usePolling) {
+        console.log('🔄 Iniciando polling cada 3 segundos...');
+        pollingInterval = setInterval(() => {
+          console.log('🔄 Recargando tareas (polling)...');
+          loadTasks();
+        }, 3000);
+      }
+    }, 3000);
+
+    return () => {
+      console.log('🔌 Limpiando conexiones...');
+      supabase.removeChannel(channel);
+      clearTimeout(pollingTimeout);
+      if (pollingInterval) clearInterval(pollingInterval);
+    };
+  }, [usePolling]);
+
+  const handleRealtimeUpdate = (payload: any) => {
+    if (payload.eventType === 'INSERT') {
+      const newTask = {
+        ...payload.new,
+        notes: payload.new.notes || "",
+        subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
+        expanded: false
+      };
+      setTasks(prev => {
+        if (prev.some(t => t.id === newTask.id)) return prev;
+        return [newTask, ...prev];
+      });
+    } else if (payload.eventType === 'UPDATE') {
+      setTasks(prev => prev.map(task => {
+        if (task.id === payload.new.id) {
+          return {
+            ...payload.new,
+            notes: payload.new.notes || "",
+            subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
+            expanded: task.expanded
+          };
+        }
+        return task;
+      }));
+    } else if (payload.eventType === 'DELETE') {
+      setTasks(prev => prev.filter(task => task.id !== payload.old.id));
+    }
+  };
+
   const loadTasks = async () => {
     try {
-      console.log('📥 Cargando tareas del equipo...');
-      
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
@@ -235,11 +140,6 @@ const TaskManager = () => {
 
       if (error) {
         console.error("Error al cargar tareas:", error);
-        toast({
-          title: "Error",
-          description: `Error: ${error.message}`,
-          variant: "destructive"
-        });
         return;
       }
 
@@ -248,20 +148,16 @@ const TaskManager = () => {
         
         return (data || []).map(task => ({
           ...task,
+          notes: task.notes || "",
           subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
           expanded: expandedMap.get(task.id) ?? false
         }));
       });
-      
-      console.log('✅ Tareas cargadas:', data?.length || 0);
     } catch (err) {
       console.error("Error inesperado:", err);
     }
   };
 
-  // ============================================
-  // CRUD OPERATIONS
-  // ============================================
   const addTask = async () => {
     if (!newTaskText.trim()) {
       toast({
@@ -276,13 +172,13 @@ const TaskManager = () => {
       id: `${Date.now()}-${Math.random()}`,
       text: newTaskText,
       completed: false,
+      notes: "",
       subtasks: [],
       expanded: false,
       created_by: currentUser,
       created_at: new Date().toISOString()
     };
 
-    // Actualización optimista
     setTasks(prev => [newTask, ...prev]);
     setNewTaskText("");
     setShowAddTask(false);
@@ -310,7 +206,58 @@ const TaskManager = () => {
     }
   };
 
-  const toggleTaskComplete = useCallback(async (taskId: string) => {
+  const addSubtask = async (taskId: string) => {
+    const subtaskText = newSubtaskText[taskId]?.trim();
+    if (!subtaskText) {
+      toast({
+        title: "Campo vacío",
+        description: "Por favor ingresa un texto para la subtarea",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const newSubtask: Subtask = {
+      id: `${Date.now()}-${Math.random()}`,
+      text: subtaskText,
+      completed: false
+    };
+
+    setTasks(prev => prev.map(t => 
+      t.id === taskId 
+        ? { ...t, subtasks: [...t.subtasks, newSubtask] }
+        : t
+    ));
+    setNewSubtaskText({ ...newSubtaskText, [taskId]: "" });
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ subtasks: [...task.subtasks, newSubtask] })
+        .eq('id', taskId);
+
+      if (error) {
+        console.error("Error:", error);
+        setTasks(prev => prev.map(t => 
+          t.id === taskId 
+            ? { ...t, subtasks: task.subtasks }
+            : t
+        ));
+        toast({
+          title: "Error",
+          description: "No se pudo crear la subtarea",
+          variant: "destructive"
+        });
+      }
+    } catch (err) {
+      console.error("Error:", err);
+    }
+  };
+
+  const toggleTaskComplete = async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
@@ -340,38 +287,9 @@ const TaskManager = () => {
     } catch (err) {
       console.error("Error:", err);
     }
-  }, [tasks]);
+  };
 
-  const toggleExpanded = useCallback((taskId: string) => {
-    setTasks(prev => prev.map(task =>
-      task.id === taskId ? { ...task, expanded: !task.expanded } : task
-    ));
-  }, []);
-
-  const deleteTask = useCallback(async (taskId: string) => {
-    const taskToDelete = tasks.find(t => t.id === taskId);
-    if (!taskToDelete) return;
-
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-
-    try {
-      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-      
-      if (error) {
-        console.error("Error:", error);
-        setTasks(prev => [...prev, taskToDelete]);
-        toast({
-          title: "Error",
-          description: "No se pudo eliminar la tarea",
-          variant: "destructive"
-        });
-      }
-    } catch (err) {
-      console.error("Error:", err);
-    }
-  }, [tasks, toast]);
-
-  const toggleSubtaskComplete = useCallback(async (taskId: string, subtaskId: string) => {
+  const toggleSubtaskComplete = async (taskId: string, subtaskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
@@ -399,9 +317,32 @@ const TaskManager = () => {
     } catch (err) {
       console.error("Error:", err);
     }
-  }, [tasks]);
+  };
 
-  const deleteSubtask = useCallback(async (taskId: string, subtaskId: string) => {
+  const deleteTask = async (taskId: string) => {
+    const taskToDelete = tasks.find(t => t.id === taskId);
+    if (!taskToDelete) return;
+
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+
+    try {
+      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+      
+      if (error) {
+        console.error("Error:", error);
+        setTasks(prev => [...prev, taskToDelete]);
+        toast({
+          title: "Error",
+          description: "No se pudo eliminar la tarea",
+          variant: "destructive"
+        });
+      }
+    } catch (err) {
+      console.error("Error:", err);
+    }
+  };
+
+  const deleteSubtask = async (taskId: string, subtaskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
@@ -431,61 +372,201 @@ const TaskManager = () => {
     } catch (err) {
       console.error("Error:", err);
     }
-  }, [tasks]);
+  };
 
-  const addSubtask = useCallback(async (taskId: string, text: string) => {
+  const toggleExpanded = (taskId: string) => {
+    setTasks(prevTasks => 
+      prevTasks.map(task =>
+        task.id === taskId ? { ...task, expanded: !task.expanded } : task
+      )
+    );
+  };
+
+  const updateNotes = async (taskId: string, notes: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const newSubtask: Subtask = {
-      id: `${Date.now()}-${Math.random()}`,
-      text,
-      completed: false
-    };
-
-    const updatedSubtasks = [...task.subtasks, newSubtask];
-
     setTasks(prev => prev.map(t => 
-      t.id === taskId 
-        ? { ...t, subtasks: updatedSubtasks }
-        : t
+      t.id === taskId ? { ...t, notes } : t
     ));
 
     try {
       const { error } = await supabase
         .from('tasks')
-        .update({ subtasks: updatedSubtasks })
+        .update({ notes })
         .eq('id', taskId);
 
       if (error) {
-        console.error("Error:", error);
-        setTasks(prev => prev.map(t => 
-          t.id === taskId 
-            ? { ...t, subtasks: task.subtasks }
-            : t
-        ));
+        console.error("Error al guardar notas:", error);
       }
     } catch (err) {
       console.error("Error:", err);
     }
-  }, [tasks]);
+  };
 
-  // ============================================
-  // RENDER
-  // ============================================
+  const getSubtaskProgress = (task: Task) => {
+    if (task.subtasks.length === 0) return null;
+    const completed = task.subtasks.filter(st => st.completed).length;
+    const total = task.subtasks.length;
+    const percentage = Math.round((completed / total) * 100);
+    return { completed, total, percentage };
+  };
+
   const pendingTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
+
+  const renderTask = (task: Task) => {
+    const progress = getSubtaskProgress(task);
+    
+    return (
+      <div
+        key={task.id}
+        className={`border rounded-lg p-3 transition-all ${
+          task.completed 
+            ? "dark:bg-green-900/20 dark:border-green-700/50 bg-green-50 border-green-200"
+            : "dark:bg-gray-800/50 dark:border-gray-700 dark:hover:border-gray-600 bg-white border-gray-200 hover:border-gray-300"
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <Checkbox 
+            checked={task.completed}
+            onCheckedChange={() => toggleTaskComplete(task.id)}
+            className="h-5 w-5 mt-0.5"
+          />
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1">
+                <p className={`font-medium ${
+                  task.completed 
+                    ? "dark:text-green-400 dark:line-through text-green-600 line-through"
+                    : "dark:text-white text-gray-900"
+                }`}>
+                  {task.text}
+                </p>
+                <p className="text-xs dark:text-gray-500 text-gray-600 mt-0.5">
+                  Por: {task.created_by}
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {task.notes && !task.expanded && (
+                  <StickyNote className="h-3 w-3 dark:text-yellow-400 text-yellow-600" />
+                )}
+                {progress && (
+                  <span className="text-xs dark:text-gray-400 text-gray-600 mr-1">
+                    {progress.completed}/{progress.total}
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleExpanded(task.id)}
+                  className="h-7 w-7 p-0 dark:text-gray-400 dark:hover:text-white text-gray-600 hover:text-gray-900"
+                >
+                  {task.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => deleteTask(task.id)}
+                  className="h-7 w-7 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            {progress && (
+              <div className="mt-2">
+                <div className="h-1.5 dark:bg-gray-700 bg-gray-300 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${progress.percentage}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {task.expanded && (
+          <div className="mt-3 pl-8 space-y-3">
+            {/* NOTAS */}
+            <div className="space-y-1">
+              <label className="text-xs dark:text-gray-400 text-gray-600 flex items-center gap-1">
+                <StickyNote className="h-3 w-3" />
+                Notas
+              </label>
+              <Textarea
+                placeholder="Agregar notas..."
+                defaultValue={task.notes}
+                onChange={(e) => updateNotes(task.id, e.target.value)}
+                className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-gray-50 border-gray-300 text-gray-900 text-sm min-h-[60px] resize-none"
+              />
+            </div>
+
+            {/* SUBTAREAS */}
+            <div className="space-y-2">
+              <label className="text-xs dark:text-gray-400 text-gray-600">Subtareas</label>
+              {task.subtasks.map((subtask) => (
+                <div 
+                  key={subtask.id}
+                  className="flex items-center gap-2 py-1"
+                >
+                  <Checkbox
+                    checked={subtask.completed}
+                    onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
+                    className="h-4 w-4"
+                  />
+                  <p className={`text-sm flex-1 ${
+                    subtask.completed 
+                      ? "dark:text-green-400 dark:line-through text-green-600 line-through"
+                      : "dark:text-gray-300 text-gray-700"
+                  }`}>
+                    {subtask.text}
+                  </p>
+                  {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteSubtask(task.id, subtask.id)}
+                    className="h-6 w-6 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+
+              {/* Agregar subtarea */}
+              <div className="flex gap-2 mt-2 pt-2 dark:border-gray-700 border-gray-300 border-t">
+                <Input
+                  placeholder="Agregar subtarea..."
+                  value={newSubtaskText[task.id] || ""}
+                  onChange={(e) => setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })}
+                  onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
+                  className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
+                />
+                <Button
+                  onClick={() => addSubtask(task.id)}
+                  size="sm"
+                  className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Agregar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Card className="mb-6 dark:bg-[#161A15] dark:border-[#161A15] bg-white border-gray-200">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <div className="flex items-center gap-3">
-          <CardTitle className="dark:text-white text-gray-900">Operaciones del Equipo</CardTitle>
-          <div className="flex items-center gap-1.5">
-            <Users className="h-4 w-4 dark:text-purple-400 text-purple-600" />
-            <span className="text-xs dark:text-gray-400 text-gray-600">Tareas compartidas</span>
-          </div>
-        </div>
+        <CardTitle className="dark:text-white text-gray-900">Operaciones del Equipo</CardTitle>
         {!showAddTask && (
           <Button 
             onClick={() => setShowAddTask(true)}
@@ -536,7 +617,7 @@ const TaskManager = () => {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Pendientes</h3>
-              <span className="text-xs dark:bg-blue-500/20 dark:text-blue-300 bg-blue-100 text-blue-800 px-2 py-1 rounded">
+              <span className="text-xs dark:bg-yellow-500/20 dark:text-yellow-300 bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
                 {pendingTasks.length}
               </span>
             </div>
@@ -547,18 +628,7 @@ const TaskManager = () => {
                   <p className="text-xs mt-1">Agrega una nueva operación</p>
                 </div>
               ) : (
-                pendingTasks.map(task => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    onToggleComplete={toggleTaskComplete}
-                    onToggleExpanded={toggleExpanded}
-                    onDelete={deleteTask}
-                    onToggleSubtaskComplete={toggleSubtaskComplete}
-                    onDeleteSubtask={deleteSubtask}
-                    onAddSubtask={addSubtask}
-                  />
-                ))
+                pendingTasks.map(renderTask)
               )}
             </div>
           </div>
@@ -573,22 +643,11 @@ const TaskManager = () => {
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
                 <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>No hay operaciones completadas</p>
+                  <p>Aún no hay operaciones completadas</p>
                   <p className="text-xs mt-1">Completa algunas operaciones</p>
                 </div>
               ) : (
-                completedTasks.map(task => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    onToggleComplete={toggleTaskComplete}
-                    onToggleExpanded={toggleExpanded}
-                    onDelete={deleteTask}
-                    onToggleSubtaskComplete={toggleSubtaskComplete}
-                    onDeleteSubtask={deleteSubtask}
-                    onAddSubtask={addSubtask}
-                  />
-                ))
+                completedTasks.map(renderTask)
               )}
             </div>
           </div>
@@ -596,12 +655,12 @@ const TaskManager = () => {
 
         <div className="pt-4 dark:border-gray-700 border-gray-300 border-t">
           <p className="text-xs dark:text-gray-500 text-gray-600">
-            💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
+            💡 Click en la flecha (→) para expandir y ver/agregar subtareas y notas. 
             <span className="ml-2">
               {usePolling ? (
                 <span className="dark:text-yellow-400 text-yellow-600">🔄 Modo Polling (recarga cada 3s)</span>
               ) : (
-                <span className="dark:text-green-400 text-green-600">⚡ Actualizaciones en tiempo real</span>
+                <span className="dark:text-green-400 text-green-600">⚡ En Vivo - Actualizaciones en tiempo real</span>
               )}
             </span>
           </p>

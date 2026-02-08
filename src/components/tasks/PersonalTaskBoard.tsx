@@ -111,11 +111,7 @@ const PersonalTaskItem = memo(({
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
-            <p className={`font-medium ${
-              task.completed 
-                ? "dark:text-green-400 dark:line-through text-green-600 line-through"
-                : "dark:text-white text-gray-900"
-            }`}>
+            <p className={`font-medium ${task.completed ? "dark:text-green-400 dark:line-through text-green-600 line-through" : "dark:text-white text-gray-900"}`}>
               {task.text}
             </p>
             <div className="flex items-center gap-1 ml-2">
@@ -190,11 +186,7 @@ const PersonalTaskItem = memo(({
                   onCheckedChange={() => onToggleSubtaskComplete(task.id, subtask.id)}
                   className="h-4 w-4"
                 />
-                <p className={`text-sm flex-1 ${
-                  subtask.completed 
-                    ? "dark:text-green-400 dark:line-through text-green-600 line-through"
-                    : "dark:text-gray-300 text-gray-700"
-                }`}>
+                <p className={`text-sm flex-1 ${subtask.completed ? "dark:text-green-400 dark:line-through text-green-600 line-through" : "dark:text-gray-300 text-gray-700"}`}>
                   {subtask.text}
                 </p>
                 {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
@@ -552,8 +544,8 @@ const PersonalTasksManager = () => {
         <div className="flex items-center gap-3">
           <CardTitle className="dark:text-white text-gray-900">Mis Tareas Personales</CardTitle>
           <div className="flex items-center gap-1.5">
-            <User className="h-4 w-4 dark:text-blue-400 text-blue-600" />
-            <span className="text-xs dark:text-blue-400 text-blue-600">{currentUser}</span>
+            <User className="h-4 w-4 dark:text-gray-400 text-gray-600" />
+            <span className="text-xs dark:text-gray-400 text-gray-600">{currentUser}</span>
           </div>
         </div>
         {!showAddTask && (
