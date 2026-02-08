@@ -4,10 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, Wifi, WifiOff, StickyNote } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // ============================================
 // TIPOS
@@ -22,7 +21,6 @@ interface Task {
   id: string;
   text: string;
   completed: boolean;
-  notes: string;
   subtasks: Subtask[];
   expanded: boolean;
   created_by: string;
@@ -30,7 +28,7 @@ interface Task {
 }
 
 // ============================================
-// COMPONENTE DE TAREA INDIVIDUAL (MEMOIZADO)
+// COMPONENTE DE TAREA (MEMOIZADO)
 // ============================================
 interface TaskItemProps {
   task: Task;
@@ -40,8 +38,6 @@ interface TaskItemProps {
   onToggleSubtaskComplete: (taskId: string, subtaskId: string) => void;
   onDeleteSubtask: (taskId: string, subtaskId: string) => void;
   onAddSubtask: (taskId: string, text: string) => void;
-  onUpdateNotes: (taskId: string, notes: string) => void;
-  onFocusChange: (taskId: string, isFocused: boolean) => void;
 }
 
 const TaskItem = memo(({
@@ -52,30 +48,8 @@ const TaskItem = memo(({
   onToggleSubtaskComplete,
   onDeleteSubtask,
   onAddSubtask,
-  onUpdateNotes,
-  onFocusChange,
 }: TaskItemProps) => {
   const [newSubtaskText, setNewSubtaskText] = useState("");
-  const [localNotes, setLocalNotes] = useState(task.notes || "");
-  const notesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Sincronizar notas locales con props cuando cambian externamente
-  useEffect(() => {
-    setLocalNotes(task.notes || "");
-  }, [task.notes]);
-
-  const handleNotesChange = (value: string) => {
-    setLocalNotes(value);
-    
-    // Debounce para guardar notas
-    if (notesTimeoutRef.current) {
-      clearTimeout(notesTimeoutRef.current);
-    }
-    
-    notesTimeoutRef.current = setTimeout(() => {
-      onUpdateNotes(task.id, value);
-    }, 1000);
-  };
 
   const handleAddSubtask = useCallback(() => {
     if (newSubtaskText.trim()) {
@@ -100,11 +74,10 @@ const TaskItem = memo(({
     <div
       className={`border rounded-lg p-3 transition-all ${
         task.completed 
-          ? "bg-green-900/20 border-green-700/50" 
-          : "bg-gray-800/50 border-gray-700 hover:border-gray-600"
+          ? "dark:bg-green-900/20 dark:border-green-700/50 bg-green-50 border-green-200"
+          : "dark:bg-gray-800/50 dark:border-gray-700 dark:hover:border-gray-600 bg-white border-gray-200 hover:border-gray-300"
       }`}
     >
-      {/* Header de la tarea - Checkbox centrado verticalmente */}
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center">
           <Checkbox 
@@ -116,15 +89,21 @@ const TaskItem = memo(({
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
-            <p className={`font-medium ${task.completed ? "text-green-400 line-through" : "text-white"}`}>
-              {task.text}
-            </p>
-            <div className="flex items-center gap-1 ml-2">
-              {task.notes && !task.expanded && (
-                <StickyNote className="h-3 w-3 text-yellow-400" />
-              )}
+            <div className="flex-1">
+              <p className={`font-medium ${
+                task.completed 
+                  ? "dark:text-green-400 dark:line-through text-green-600 line-through"
+                  : "dark:text-white text-gray-900"
+              }`}>
+                {task.text}
+              </p>
+              <p className="text-xs dark:text-gray-500 text-gray-600 mt-0.5">
+                Por: {task.created_by}
+              </p>
+            </div>
+            <div className="flex items-center gap-1 ml-2 flex-shrink-0">
               {progress && (
-                <span className="text-xs text-gray-400 mr-2">
+                <span className="text-xs dark:text-gray-400 text-gray-600 mr-2">
                   {progress.completed}/{progress.total}
                 </span>
               )}
@@ -132,7 +111,7 @@ const TaskItem = memo(({
                 variant="ghost"
                 size="sm"
                 onClick={() => onToggleExpanded(task.id)}
-                className="h-7 w-7 p-0 text-gray-400 hover:text-white"
+                className="h-7 w-7 p-0 dark:text-gray-400 dark:hover:text-white text-gray-600 hover:text-gray-900"
               >
                 {task.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
@@ -140,7 +119,7 @@ const TaskItem = memo(({
                 variant="ghost"
                 size="sm"
                 onClick={() => onDelete(task.id)}
-                className="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+                className="h-7 w-7 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -150,43 +129,23 @@ const TaskItem = memo(({
           {/* Barra de progreso */}
           {progress && (
             <div className="mt-2">
-              <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-1.5 dark:bg-gray-700 bg-gray-300 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-green-500 transition-all duration-300"
+                  className="h-full bg-blue-500 transition-all duration-300"
                   style={{ width: `${progress.percentage}%` }}
                 />
               </div>
             </div>
           )}
-          
-          <p className="text-xs text-gray-500 mt-1">
-            Por: {task.created_by}
-          </p>
         </div>
       </div>
 
       {/* Contenido expandido */}
       {task.expanded && (
         <div className="mt-3 pl-8 space-y-3">
-          {/* Campo de Notas */}
-          <div className="space-y-1">
-            <label className="text-xs text-gray-400 flex items-center gap-1">
-              <StickyNote className="h-3 w-3" />
-              Notas
-            </label>
-            <Textarea
-              placeholder="Agregar notas..."
-              value={localNotes}
-              onChange={(e) => handleNotesChange(e.target.value)}
-              onFocus={() => onFocusChange(task.id, true)}
-              onBlur={() => onFocusChange(task.id, false)}
-              className="bg-gray-900 border-gray-600 text-white text-sm min-h-[60px] resize-none"
-            />
-          </div>
-
           {/* Subtareas */}
           <div className="space-y-2">
-            <label className="text-xs text-gray-400">Subtareas</label>
+            <label className="text-xs dark:text-gray-400 text-gray-600">Subtareas</label>
             {task.subtasks.map((subtask) => (
               <div 
                 key={subtask.id}
@@ -197,15 +156,19 @@ const TaskItem = memo(({
                   onCheckedChange={() => onToggleSubtaskComplete(task.id, subtask.id)}
                   className="h-4 w-4"
                 />
-                <p className={`text-sm flex-1 ${subtask.completed ? "text-green-400 line-through" : "text-gray-300"}`}>
+                <p className={`text-sm flex-1 ${
+                  subtask.completed 
+                    ? "dark:text-green-400 dark:line-through text-green-600 line-through"
+                    : "dark:text-gray-300 text-gray-700"
+                }`}>
                   {subtask.text}
                 </p>
-                {subtask.completed && <CheckCircle2 className="h-3 w-3 text-green-400" />}
+                {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => onDeleteSubtask(task.id, subtask.id)}
-                  className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                  className="h-6 w-6 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -213,15 +176,13 @@ const TaskItem = memo(({
             ))}
 
             {/* Agregar subtarea */}
-            <div className="flex gap-2 mt-2 pt-2 border-t border-gray-700">
+            <div className="flex gap-2 mt-2 pt-2 dark:border-gray-700 border-gray-300 border-t">
               <Input
                 placeholder="Agregar subtarea..."
                 value={newSubtaskText}
                 onChange={(e) => setNewSubtaskText(e.target.value)}
                 onKeyPress={handleKeyPress}
-                onFocus={() => onFocusChange(task.id, true)}
-                onBlur={() => onFocusChange(task.id, false)}
-                className="bg-white text-sm h-8"
+                className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
               />
               <Button
                 onClick={handleAddSubtask}
@@ -242,155 +203,31 @@ const TaskItem = memo(({
 TaskItem.displayName = 'TaskItem';
 
 // ============================================
-// COMPONENTE PRINCIPAL: TaskManager (Operaciones)
+// COMPONENTE PRINCIPAL: TaskManager
 // ============================================
 const TaskManager = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [showAddTask, setShowAddTask] = useState(false);
   const [currentUser, setCurrentUser] = useState("");
-  const [isConnected, setIsConnected] = useState(false);
+  const [usePolling, setUsePolling] = useState(false);
   const { toast } = useToast();
-  
-  const editingTasksRef = useRef<Set<string>>(new Set());
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const mountedRef = useRef(true);
 
-  // ============================================
-  // INICIALIZACIÓN
-  // ============================================
   useEffect(() => {
-    mountedRef.current = true;
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
     
-    console.log('🚀 TaskManager (Operaciones) iniciando...');
-    
+    console.log('🚀 TaskManager iniciando para:', username);
     loadTasks();
-    
-    const timer = setTimeout(() => {
-      if (mountedRef.current) {
-        initRealtime();
-      }
-    }, 500);
-
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(timer);
-      cleanupRealtime();
-    };
   }, []);
 
   // ============================================
-  // REALTIME
-  // ============================================
-  const initRealtime = async () => {
-    console.log('📡 Inicializando Realtime para tasks...');
-    cleanupRealtime();
-    
-    try {
-      const channel = supabase.channel('tasks-realtime');
-      
-      channel
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          (payload) => {
-            if (!mountedRef.current) return;
-            
-            console.log('🔔 Evento Realtime (tasks):', payload.eventType);
-            
-            switch (payload.eventType) {
-              case 'INSERT':
-                handleRealtimeInsert(payload.new as Task);
-                break;
-              case 'UPDATE':
-                handleRealtimeUpdate(payload.new as Task);
-                break;
-              case 'DELETE':
-                handleRealtimeDelete(payload.old as { id: string });
-                break;
-            }
-          }
-        )
-        .subscribe((status, err) => {
-          if (!mountedRef.current) return;
-          
-          console.log('📊 Realtime status:', status);
-          
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Realtime conectado!');
-            setIsConnected(true);
-          } else if (status === 'CLOSED') {
-            setIsConnected(false);
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ Error de canal:', err);
-            setIsConnected(false);
-            setTimeout(() => {
-              if (mountedRef.current) initRealtime();
-            }, 5000);
-          }
-        });
-      
-      channelRef.current = channel;
-    } catch (error) {
-      console.error('❌ Error inicializando Realtime:', error);
-      setIsConnected(false);
-    }
-  };
-
-  const cleanupRealtime = () => {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
-  };
-
-  // ============================================
-  // HANDLERS DE REALTIME
-  // ============================================
-  const handleRealtimeInsert = (newTask: Task) => {
-    setTasks(prev => {
-      if (prev.some(t => t.id === newTask.id)) return prev;
-      return [{
-        ...newTask,
-        notes: newTask.notes || "",
-        subtasks: Array.isArray(newTask.subtasks) ? newTask.subtasks : [],
-        expanded: false
-      }, ...prev];
-    });
-  };
-
-  const handleRealtimeUpdate = (updatedTask: Task) => {
-    setTasks(prev => prev.map(task => {
-      if (task.id !== updatedTask.id) return task;
-      
-      // Si está siendo editada, solo actualizar campos seguros
-      if (editingTasksRef.current.has(task.id)) {
-        return {
-          ...task,
-          completed: updatedTask.completed,
-        };
-      }
-      
-      return {
-        ...updatedTask,
-        notes: updatedTask.notes || "",
-        subtasks: Array.isArray(updatedTask.subtasks) ? updatedTask.subtasks : [],
-        expanded: task.expanded
-      };
-    }));
-  };
-
-  const handleRealtimeDelete = (deletedTask: { id: string }) => {
-    setTasks(prev => prev.filter(task => task.id !== deletedTask.id));
-  };
-
-  // ============================================
-  // CARGAR TAREAS
+  // CARGAR TAREAS DEL EQUIPO (todas)
   // ============================================
   const loadTasks = async () => {
     try {
+      console.log('📥 Cargando tareas del equipo...');
+      
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
@@ -400,20 +237,17 @@ const TaskManager = () => {
         console.error("Error al cargar tareas:", error);
         toast({
           title: "Error",
-          description: "No se pudieron cargar las tareas",
+          description: `Error: ${error.message}`,
           variant: "destructive"
         });
         return;
       }
-
-      if (!mountedRef.current) return;
 
       setTasks((prevTasks) => {
         const expandedMap = new Map(prevTasks.map(t => [t.id, t.expanded]));
         
         return (data || []).map(task => ({
           ...task,
-          notes: task.notes || "",
           subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
           expanded: expandedMap.get(task.id) ?? false
         }));
@@ -424,17 +258,6 @@ const TaskManager = () => {
       console.error("Error inesperado:", err);
     }
   };
-
-  // ============================================
-  // MANEJAR CAMBIO DE FOCO
-  // ============================================
-  const handleFocusChange = useCallback((taskId: string, isFocused: boolean) => {
-    if (isFocused) {
-      editingTasksRef.current.add(taskId);
-    } else {
-      editingTasksRef.current.delete(taskId);
-    }
-  }, []);
 
   // ============================================
   // CRUD OPERATIONS
@@ -450,30 +273,22 @@ const TaskManager = () => {
     }
 
     const newTask: Task = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `${Date.now()}-${Math.random()}`,
       text: newTaskText,
       completed: false,
-      notes: "",
       subtasks: [],
       expanded: false,
       created_by: currentUser,
       created_at: new Date().toISOString()
     };
 
+    // Actualización optimista
     setTasks(prev => [newTask, ...prev]);
     setNewTaskText("");
     setShowAddTask(false);
 
     try {
-      const { error } = await supabase.from('tasks').insert([{
-        id: newTask.id,
-        text: newTask.text,
-        completed: newTask.completed,
-        notes: newTask.notes,
-        subtasks: newTask.subtasks,
-        created_by: newTask.created_by,
-        created_at: newTask.created_at
-      }]);
+      const { error } = await supabase.from('tasks').insert([newTask]);
       
       if (error) {
         console.error("Error:", error);
@@ -623,7 +438,7 @@ const TaskManager = () => {
     if (!task) return;
 
     const newSubtask: Subtask = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `${Date.now()}-${Math.random()}`,
       text,
       completed: false
     };
@@ -655,28 +470,6 @@ const TaskManager = () => {
     }
   }, [tasks]);
 
-  const updateNotes = useCallback(async (taskId: string, notes: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    setTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, notes } : t
-    ));
-
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ notes })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error al guardar notas:", error);
-      }
-    } catch (err) {
-      console.error("Error:", err);
-    }
-  }, [tasks]);
-
   // ============================================
   // RENDER
   // ============================================
@@ -684,22 +477,13 @@ const TaskManager = () => {
   const completedTasks = tasks.filter(t => t.completed);
 
   return (
-    <Card className="mb-6 bg-[#161A15] border-[#161A15]">
+    <Card className="mb-6 dark:bg-[#161A15] dark:border-[#161A15] bg-white border-gray-200">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div className="flex items-center gap-3">
-          <CardTitle className="text-white">Tareas Activas</CardTitle>
+          <CardTitle className="dark:text-white text-gray-900">Operaciones del Equipo</CardTitle>
           <div className="flex items-center gap-1.5">
-            {isConnected ? (
-              <>
-                <Wifi className="h-4 w-4 text-green-400" />
-                <span className="text-xs text-green-400">En vivo</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-4 w-4 text-yellow-400 animate-pulse" />
-                <span className="text-xs text-yellow-400">Conectando...</span>
-              </>
-            )}
+            <Users className="h-4 w-4 dark:text-purple-400 text-purple-600" />
+            <span className="text-xs dark:text-gray-400 text-gray-600">Tareas compartidas</span>
           </div>
         </div>
         {!showAddTask && (
@@ -707,23 +491,23 @@ const TaskManager = () => {
             onClick={() => setShowAddTask(true)}
             size="sm"
             variant="ghost"
-            className="text-gray-400 hover:text-white hover:bg-gray-800"
+            className="dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
           >
             <Plus className="h-4 w-4 mr-1" />
-            Nueva tarea
+            Nueva operación
           </Button>
         )}
       </CardHeader>
       
       <CardContent className="space-y-4">
         {showAddTask && (
-          <div className="flex gap-2 pb-4 border-b border-gray-700">
+          <div className="flex gap-2 pb-4 dark:border-gray-700 border-gray-300 border-b">
             <Input
-              placeholder="Escribe la nueva tarea..."
+              placeholder="Escribe la nueva operación..."
               value={newTaskText}
               onChange={(e) => setNewTaskText(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addTask()}
-              className="bg-white flex-1 border-gray-300 focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 flex-1 focus-visible:ring-0 focus-visible:ring-offset-0"
               autoFocus
             />
             <Button 
@@ -751,16 +535,16 @@ const TaskManager = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Pendientes</h3>
-              <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
+              <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Pendientes</h3>
+              <span className="text-xs dark:bg-blue-500/20 dark:text-blue-300 bg-blue-100 text-blue-800 px-2 py-1 rounded">
                 {pendingTasks.length}
               </span>
             </div>
             <div className="space-y-3">
               {pendingTasks.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>¡No hay tareas pendientes!</p>
-                  <p className="text-xs mt-1">Agrega una nueva tarea</p>
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                  <p>¡No hay operaciones pendientes!</p>
+                  <p className="text-xs mt-1">Agrega una nueva operación</p>
                 </div>
               ) : (
                 pendingTasks.map(task => (
@@ -773,8 +557,6 @@ const TaskManager = () => {
                     onToggleSubtaskComplete={toggleSubtaskComplete}
                     onDeleteSubtask={deleteSubtask}
                     onAddSubtask={addSubtask}
-                    onUpdateNotes={updateNotes}
-                    onFocusChange={handleFocusChange}
                   />
                 ))
               )}
@@ -783,16 +565,16 @@ const TaskManager = () => {
 
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Completadas</h3>
-              <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">
+              <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Completadas</h3>
+              <span className="text-xs dark:bg-green-500/20 dark:text-green-300 bg-green-100 text-green-800 px-2 py-1 rounded">
                 {completedTasks.length}
               </span>
             </div>
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>No hay tareas completadas</p>
-                  <p className="text-xs mt-1">Completa algunas tareas</p>
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                  <p>No hay operaciones completadas</p>
+                  <p className="text-xs mt-1">Completa algunas operaciones</p>
                 </div>
               ) : (
                 completedTasks.map(task => (
@@ -805,13 +587,24 @@ const TaskManager = () => {
                     onToggleSubtaskComplete={toggleSubtaskComplete}
                     onDeleteSubtask={deleteSubtask}
                     onAddSubtask={addSubtask}
-                    onUpdateNotes={updateNotes}
-                    onFocusChange={handleFocusChange}
                   />
                 ))
               )}
             </div>
           </div>
+        </div>
+
+        <div className="pt-4 dark:border-gray-700 border-gray-300 border-t">
+          <p className="text-xs dark:text-gray-500 text-gray-600">
+            💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
+            <span className="ml-2">
+              {usePolling ? (
+                <span className="dark:text-yellow-400 text-yellow-600">🔄 Modo Polling (recarga cada 3s)</span>
+              ) : (
+                <span className="dark:text-green-400 text-green-600">⚡ Actualizaciones en tiempo real</span>
+              )}
+            </span>
+          </p>
         </div>
       </CardContent>
     </Card>

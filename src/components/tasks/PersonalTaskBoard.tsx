@@ -95,8 +95,8 @@ const PersonalTaskItem = memo(({
     <div
       className={`border rounded-lg p-3 transition-all ${
         task.completed 
-          ? "bg-green-900/20 border-green-700/50" 
-          : "bg-gray-800/50 border-gray-700 hover:border-gray-600"
+          ? "dark:bg-green-900/20 dark:border-green-700/50 bg-green-50 border-green-200"
+          : "dark:bg-gray-800/50 dark:border-gray-700 dark:hover:border-gray-600 bg-white border-gray-200 hover:border-gray-300"
       }`}
     >
       {/* Header - Checkbox centrado verticalmente */}
@@ -111,15 +111,19 @@ const PersonalTaskItem = memo(({
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
-            <p className={`font-medium ${task.completed ? "text-green-400 line-through" : "text-white"}`}>
+            <p className={`font-medium ${
+              task.completed 
+                ? "dark:text-green-400 dark:line-through text-green-600 line-through"
+                : "dark:text-white text-gray-900"
+            }`}>
               {task.text}
             </p>
             <div className="flex items-center gap-1 ml-2">
               {task.notes && !task.expanded && (
-                <StickyNote className="h-3 w-3 text-yellow-400" />
+                <StickyNote className="h-3 w-3 dark:text-yellow-400 text-yellow-600" />
               )}
               {progress && (
-                <span className="text-xs text-gray-400 mr-2">
+                <span className="text-xs dark:text-gray-400 text-gray-600 mr-2">
                   {progress.completed}/{progress.total}
                 </span>
               )}
@@ -127,7 +131,7 @@ const PersonalTaskItem = memo(({
                 variant="ghost"
                 size="sm"
                 onClick={() => onToggleExpanded(task.id)}
-                className="h-7 w-7 p-0 text-gray-400 hover:text-white"
+                className="h-7 w-7 p-0 dark:text-gray-400 dark:hover:text-white text-gray-600 hover:text-gray-900"
               >
                 {task.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
@@ -135,7 +139,7 @@ const PersonalTaskItem = memo(({
                 variant="ghost"
                 size="sm"
                 onClick={() => onDelete(task.id)}
-                className="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+                className="h-7 w-7 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -145,7 +149,7 @@ const PersonalTaskItem = memo(({
           {/* Barra de progreso */}
           {progress && (
             <div className="mt-2">
-              <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-1.5 dark:bg-gray-700 bg-gray-300 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-green-500 transition-all duration-300"
                   style={{ width: `${progress.percentage}%` }}
@@ -161,7 +165,7 @@ const PersonalTaskItem = memo(({
         <div className="mt-3 pl-8 space-y-3">
           {/* Campo de Notas */}
           <div className="space-y-1">
-            <label className="text-xs text-gray-400 flex items-center gap-1">
+            <label className="text-xs dark:text-gray-400 text-gray-600 flex items-center gap-1">
               <StickyNote className="h-3 w-3" />
               Notas
             </label>
@@ -169,13 +173,13 @@ const PersonalTaskItem = memo(({
               placeholder="Agregar notas..."
               value={localNotes}
               onChange={(e) => handleNotesChange(e.target.value)}
-              className="bg-gray-900 border-gray-600 text-white text-sm min-h-[60px] resize-none"
+              className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-gray-50 border-gray-300 text-gray-900 text-sm min-h-[60px] resize-none"
             />
           </div>
 
           {/* Subtareas */}
           <div className="space-y-2">
-            <label className="text-xs text-gray-400">Subtareas</label>
+            <label className="text-xs dark:text-gray-400 text-gray-600">Subtareas</label>
             {task.subtasks.map((subtask) => (
               <div 
                 key={subtask.id}
@@ -186,15 +190,19 @@ const PersonalTaskItem = memo(({
                   onCheckedChange={() => onToggleSubtaskComplete(task.id, subtask.id)}
                   className="h-4 w-4"
                 />
-                <p className={`text-sm flex-1 ${subtask.completed ? "text-green-400 line-through" : "text-gray-300"}`}>
+                <p className={`text-sm flex-1 ${
+                  subtask.completed 
+                    ? "dark:text-green-400 dark:line-through text-green-600 line-through"
+                    : "dark:text-gray-300 text-gray-700"
+                }`}>
                   {subtask.text}
                 </p>
-                {subtask.completed && <CheckCircle2 className="h-3 w-3 text-green-400" />}
+                {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => onDeleteSubtask(task.id, subtask.id)}
-                  className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                  className="h-6 w-6 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -202,13 +210,13 @@ const PersonalTaskItem = memo(({
             ))}
 
             {/* Agregar subtarea */}
-            <div className="flex gap-2 mt-2 pt-2 border-t border-gray-700">
+            <div className="flex gap-2 mt-2 pt-2 dark:border-gray-700 border-gray-300 border-t">
               <Input
                 placeholder="Agregar subtarea..."
                 value={newSubtaskText}
                 onChange={(e) => setNewSubtaskText(e.target.value)}
                 onKeyPress={handleKeyPress}
-                className="bg-white text-sm h-8"
+                className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
               />
               <Button
                 onClick={handleAddSubtask}
@@ -253,19 +261,11 @@ const PersonalTasksManager = () => {
     try {
       console.log('📥 Cargando tareas para usuario:', username);
       
-      // OPCIÓN 1: Si tu tabla se llama "personal_tasks" y tiene el campo "created_by"
       const { data, error } = await supabase
         .from('personal_tasks')
         .select('*')
         .eq('created_by', username)
         .order('created_at', { ascending: false });
-
-      // OPCIÓN 2: Si tu tabla se llama "tasks" y tiene el campo "created_by" (descomentar si es necesario)
-      // const { data, error } = await supabase
-      //   .from('tasks')
-      //   .select('*')
-      //   .eq('created_by', username)
-      //   .order('created_at', { ascending: false });
 
       if (error) {
         console.error("Error al cargar tareas personales:", error);
@@ -547,13 +547,13 @@ const PersonalTasksManager = () => {
   const completedTasks = tasks.filter(t => t.completed);
 
   return (
-    <Card className="mb-6 bg-[#161A15] border-[#161A15]">
+    <Card className="mb-6 dark:bg-[#161A15] dark:border-[#161A15] bg-white border-gray-200">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div className="flex items-center gap-3">
-          <CardTitle className="text-white">Mis Tareas Personales</CardTitle>
+          <CardTitle className="dark:text-white text-gray-900">Mis Tareas Personales</CardTitle>
           <div className="flex items-center gap-1.5">
-            <User className="h-4 w-4 text-blue-400" />
-            <span className="text-xs text-blue-400">{currentUser}</span>
+            <User className="h-4 w-4 dark:text-blue-400 text-blue-600" />
+            <span className="text-xs dark:text-blue-400 text-blue-600">{currentUser}</span>
           </div>
         </div>
         {!showAddTask && (
@@ -561,7 +561,7 @@ const PersonalTasksManager = () => {
             onClick={() => setShowAddTask(true)}
             size="sm"
             variant="ghost"
-            className="text-gray-400 hover:text-white hover:bg-gray-800"
+            className="dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
           >
             <Plus className="h-4 w-4 mr-1" />
             Nueva tarea
@@ -571,13 +571,13 @@ const PersonalTasksManager = () => {
       
       <CardContent className="space-y-4">
         {showAddTask && (
-          <div className="flex gap-2 pb-4 border-b border-gray-700">
+          <div className="flex gap-2 pb-4 dark:border-gray-700 border-gray-300 border-b">
             <Input
               placeholder="Escribe tu tarea personal..."
               value={newTaskText}
               onChange={(e) => setNewTaskText(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addTask()}
-              className="bg-white flex-1 border-gray-300 focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 flex-1 focus-visible:ring-0 focus-visible:ring-offset-0"
               autoFocus
             />
             <Button 
@@ -605,14 +605,14 @@ const PersonalTasksManager = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Pendientes</h3>
-              <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
+              <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Pendientes</h3>
+              <span className="text-xs dark:bg-yellow-500/20 dark:text-yellow-300 bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
                 {pendingTasks.length}
               </span>
             </div>
             <div className="space-y-3">
               {pendingTasks.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg h-32 flex flex-col items-center justify-center">
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
                   <p>¡No hay tareas pendientes!</p>
                   <p className="text-xs mt-1">Agrega una nueva tarea</p>
                 </div>
@@ -636,14 +636,14 @@ const PersonalTasksManager = () => {
 
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Completadas</h3>
-              <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">
+              <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Completadas</h3>
+              <span className="text-xs dark:bg-green-500/20 dark:text-green-300 bg-green-100 text-green-800 px-2 py-1 rounded">
                 {completedTasks.length}
               </span>
             </div>
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg h-32 flex flex-col items-center justify-center">
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
                   <p>No hay tareas completadas</p>
                   <p className="text-xs mt-1">Completa algunas tareas</p>
                 </div>
