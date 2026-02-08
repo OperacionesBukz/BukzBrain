@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, Wifi, WifiOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // ============================================
 // TIPOS
@@ -79,7 +80,6 @@ const TaskItem = memo(({
           : "bg-gray-800/50 border-gray-700 hover:border-gray-600"
       }`}
     >
-      {/* Task Header */}
       <div className="flex items-start gap-3">
         <Checkbox 
           checked={task.completed}
@@ -117,7 +117,6 @@ const TaskItem = memo(({
             </div>
           </div>
           
-          {/* Progress Bar */}
           {progress && (
             <div className="mt-2">
               <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -135,7 +134,6 @@ const TaskItem = memo(({
         </div>
       </div>
 
-      {/* Subtasks */}
       {task.expanded && (
         <div className="mt-3 pl-8 space-y-2">
           {task.subtasks.map((subtask) => (
@@ -163,7 +161,6 @@ const TaskItem = memo(({
             </div>
           ))}
 
-          {/* Add Subtask */}
           <div className="flex gap-2 mt-2 pt-2 border-t border-gray-700">
             <Input
               placeholder="Agregar subtarea..."
@@ -200,130 +197,162 @@ const TaskManager = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [currentUser, setCurrentUser] = useState("");
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   const { toast } = useToast();
   
-  // Ref para trackear qué tareas están siendo editadas
   const editingTasksRef = useRef<Set<string>>(new Set());
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const mountedRef = useRef(true);
 
-  // Cargar usuario
+  // ============================================
+  // INICIALIZACIÓN
+  // ============================================
   useEffect(() => {
+    mountedRef.current = true;
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
     
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🚀 INICIANDO TaskManager v2.0 (Realtime + Focus Fix)');
-    console.log('👤 Usuario:', username);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🚀 TaskManager v4 iniciando...');
     
     loadTasks();
-  }, []);
+    
+    // Pequeño delay para asegurar que el componente está montado
+    const timer = setTimeout(() => {
+      if (mountedRef.current) {
+        initRealtime();
+      }
+    }, 500);
 
-  // ============================================
-  // SUPABASE REALTIME - Integrado directamente
-  // ============================================
-  useEffect(() => {
-    console.log('📡 Iniciando conexión Realtime...');
-    setConnectionStatus('connecting');
-
-    const channel = supabase
-      .channel('tasks-realtime-channel')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        (payload) => {
-          const timestamp = new Date().toLocaleTimeString();
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log(`🔥 [${timestamp}] REALTIME: ${payload.eventType}`);
-          
-          // Manejar INSERT
-          if (payload.eventType === 'INSERT') {
-            const newTask = payload.new as Task;
-            console.log('➕ Nueva tarea:', newTask.text);
-            
-            setTasks(prev => {
-              // Evitar duplicados
-              if (prev.some(t => t.id === newTask.id)) return prev;
-              
-              return [{
-                ...newTask,
-                subtasks: Array.isArray(newTask.subtasks) ? newTask.subtasks : [],
-                expanded: false
-              }, ...prev];
-            });
-          }
-          
-          // Manejar UPDATE
-          if (payload.eventType === 'UPDATE') {
-            const updatedTask = payload.new as Task;
-            console.log('📝 Tarea actualizada:', updatedTask.id);
-            
-            setTasks(prev => prev.map(task => {
-              if (task.id !== updatedTask.id) return task;
-              
-              // Si la tarea está siendo editada, solo actualizamos campos no editables
-              if (editingTasksRef.current.has(task.id)) {
-                console.log('⚠️ Tarea siendo editada - fusión selectiva');
-                return {
-                  ...task,
-                  completed: updatedTask.completed ?? task.completed,
-                  created_by: updatedTask.created_by ?? task.created_by,
-                  created_at: updatedTask.created_at ?? task.created_at,
-                  // Mantenemos text y subtasks locales
-                };
-              }
-              
-              return {
-                ...updatedTask,
-                subtasks: Array.isArray(updatedTask.subtasks) ? updatedTask.subtasks : [],
-                expanded: task.expanded
-              };
-            }));
-          }
-          
-          // Manejar DELETE
-          if (payload.eventType === 'DELETE') {
-            const oldTask = payload.old as Partial<Task>;
-            console.log('🗑️ Tarea eliminada:', oldTask.id);
-            setTasks(prev => prev.filter(task => task.id !== oldTask.id));
-          }
-          
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        }
-      )
-      .subscribe((status, err) => {
-        console.log('📊 Estado de suscripción:', status);
-        
-        if (err) {
-          console.error('❌ Error Realtime:', err);
-          setConnectionStatus('error');
-          setIsConnected(false);
-          return;
-        }
-        
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime CONECTADO');
-          setConnectionStatus('connected');
-          setIsConnected(true);
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('⚠️ Problema de conexión:', status);
-          setConnectionStatus('error');
-          setIsConnected(false);
-        } else if (status === 'CLOSED') {
-          setConnectionStatus('disconnected');
-          setIsConnected(false);
-        }
-      });
-
-    // Cleanup al desmontar
     return () => {
-      console.log('🔌 Limpiando conexión Realtime...');
-      supabase.removeChannel(channel);
+      mountedRef.current = false;
+      clearTimeout(timer);
+      cleanupRealtime();
     };
   }, []);
 
   // ============================================
-  // CARGAR TAREAS INICIAL
+  // REALTIME - Nueva implementación
+  // ============================================
+  const initRealtime = async () => {
+    console.log('📡 Inicializando Realtime...');
+    
+    // Limpiar canal anterior
+    cleanupRealtime();
+    
+    try {
+      const channel = supabase.channel('schema-db-changes');
+      
+      channel
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'tasks'
+          },
+          (payload) => {
+            if (!mountedRef.current) return;
+            
+            console.log('🔔 Evento Realtime:', payload.eventType, payload);
+            
+            switch (payload.eventType) {
+              case 'INSERT':
+                handleRealtimeInsert(payload.new as Task);
+                break;
+              case 'UPDATE':
+                handleRealtimeUpdate(payload.new as Task);
+                break;
+              case 'DELETE':
+                handleRealtimeDelete(payload.old as { id: string });
+                break;
+            }
+          }
+        )
+        .subscribe(async (status, err) => {
+          if (!mountedRef.current) return;
+          
+          console.log('📊 Realtime status:', status, err || '');
+          
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Realtime conectado!');
+            setIsConnected(true);
+          } else if (status === 'CLOSED') {
+            setIsConnected(false);
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('❌ Error de canal:', err);
+            setIsConnected(false);
+            
+            // Reintentar en 5 segundos
+            setTimeout(() => {
+              if (mountedRef.current) {
+                console.log('🔄 Reintentando conexión...');
+                initRealtime();
+              }
+            }, 5000);
+          }
+        });
+      
+      channelRef.current = channel;
+      
+    } catch (error) {
+      console.error('❌ Error inicializando Realtime:', error);
+      setIsConnected(false);
+    }
+  };
+
+  const cleanupRealtime = () => {
+    if (channelRef.current) {
+      console.log('🧹 Limpiando canal Realtime...');
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  };
+
+  // ============================================
+  // HANDLERS DE REALTIME
+  // ============================================
+  const handleRealtimeInsert = (newTask: Task) => {
+    console.log('➕ Procesando INSERT:', newTask.id);
+    setTasks(prev => {
+      if (prev.some(t => t.id === newTask.id)) {
+        console.log('⚠️ Tarea ya existe, ignorando');
+        return prev;
+      }
+      return [{
+        ...newTask,
+        subtasks: Array.isArray(newTask.subtasks) ? newTask.subtasks : [],
+        expanded: false
+      }, ...prev];
+    });
+  };
+
+  const handleRealtimeUpdate = (updatedTask: Task) => {
+    console.log('📝 Procesando UPDATE:', updatedTask.id);
+    setTasks(prev => prev.map(task => {
+      if (task.id !== updatedTask.id) return task;
+      
+      if (editingTasksRef.current.has(task.id)) {
+        console.log('⚠️ Tarea siendo editada, actualizando parcialmente');
+        return {
+          ...task,
+          completed: updatedTask.completed,
+        };
+      }
+      
+      return {
+        ...updatedTask,
+        subtasks: Array.isArray(updatedTask.subtasks) ? updatedTask.subtasks : [],
+        expanded: task.expanded
+      };
+    }));
+  };
+
+  const handleRealtimeDelete = (deletedTask: { id: string }) => {
+    console.log('🗑️ Procesando DELETE:', deletedTask.id);
+    setTasks(prev => prev.filter(task => task.id !== deletedTask.id));
+  };
+
+  // ============================================
+  // CARGAR TAREAS
   // ============================================
   const loadTasks = async () => {
     try {
@@ -341,6 +370,8 @@ const TaskManager = () => {
         });
         return;
       }
+
+      if (!mountedRef.current) return;
 
       setTasks((prevTasks) => {
         const expandedMap = new Map(prevTasks.map(t => [t.id, t.expanded]));
@@ -364,10 +395,8 @@ const TaskManager = () => {
   const handleFocusChange = useCallback((taskId: string, isFocused: boolean) => {
     if (isFocused) {
       editingTasksRef.current.add(taskId);
-      console.log('🔒 Bloqueando actualizaciones Realtime para:', taskId);
     } else {
       editingTasksRef.current.delete(taskId);
-      console.log('🔓 Desbloqueando actualizaciones Realtime para:', taskId);
     }
   }, []);
 
@@ -394,7 +423,6 @@ const TaskManager = () => {
       created_at: new Date().toISOString()
     };
 
-    // Actualización optimista
     setTasks(prev => [newTask, ...prev]);
     setNewTaskText("");
     setShowAddTask(false);
@@ -436,7 +464,6 @@ const TaskManager = () => {
     const newCompleted = !task.completed;
     const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
 
-    // Actualización optimista
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, completed: newCompleted, subtasks: updatedSubtasks }
@@ -451,7 +478,6 @@ const TaskManager = () => {
 
       if (error) {
         console.error("Error:", error);
-        // Revertir
         setTasks(prev => prev.map(t => 
           t.id === taskId 
             ? { ...t, completed: task.completed, subtasks: task.subtasks }
@@ -473,7 +499,6 @@ const TaskManager = () => {
     const taskToDelete = tasks.find(t => t.id === taskId);
     if (!taskToDelete) return;
 
-    // Actualización optimista
     setTasks(prev => prev.filter(t => t.id !== taskId));
 
     try {
@@ -503,7 +528,6 @@ const TaskManager = () => {
 
     const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
 
-    // Actualización optimista
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, subtasks: updatedSubtasks, completed: allSubtasksComplete }
@@ -531,7 +555,6 @@ const TaskManager = () => {
     const oldSubtasks = task.subtasks;
     const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
 
-    // Actualización optimista
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, subtasks: updatedSubtasks }
@@ -569,7 +592,6 @@ const TaskManager = () => {
 
     const updatedSubtasks = [...task.subtasks, newSubtask];
 
-    // Actualización optimista
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, subtasks: updatedSubtasks }
@@ -611,7 +633,6 @@ const TaskManager = () => {
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div className="flex items-center gap-3">
           <CardTitle className="text-white">Tareas Activas</CardTitle>
-          {/* Indicador de conexión Realtime */}
           <div className="flex items-center gap-1.5">
             {isConnected ? (
               <>
@@ -620,10 +641,8 @@ const TaskManager = () => {
               </>
             ) : (
               <>
-                <WifiOff className="h-4 w-4 text-yellow-400" />
-                <span className="text-xs text-yellow-400">
-                  {connectionStatus === 'connecting' ? 'Conectando...' : 'Reconectando...'}
-                </span>
+                <WifiOff className="h-4 w-4 text-yellow-400 animate-pulse" />
+                <span className="text-xs text-yellow-400">Conectando...</span>
               </>
             )}
           </div>
@@ -642,7 +661,6 @@ const TaskManager = () => {
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {/* Formulario Nueva Tarea */}
         {showAddTask && (
           <div className="flex gap-2 pb-4 border-b border-gray-700">
             <Input
@@ -675,9 +693,7 @@ const TaskManager = () => {
           </div>
         )}
 
-        {/* Grid de Tareas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pendientes */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Pendientes</h3>
@@ -709,7 +725,6 @@ const TaskManager = () => {
             </div>
           </div>
 
-          {/* Completadas */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Completadas</h3>

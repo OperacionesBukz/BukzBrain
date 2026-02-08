@@ -7,25 +7,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Las variables de entorno de Supabase no están configuradas')
 }
 
-// Cliente con configuración específica para Realtime
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    },
-    heartbeatIntervalMs: 30000,
-    timeout: 30000,
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'supabase-js/2.x'
-    }
-  }
-})
+// Cliente simplificado - dejar que Supabase maneje los defaults
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 console.log('✅ Supabase inicializado')
 console.log('📡 URL:', supabaseUrl)
