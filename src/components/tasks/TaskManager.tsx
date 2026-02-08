@@ -22,6 +22,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 interface Subtask {
   id: string;
@@ -40,7 +41,6 @@ interface Task {
   order?: number;
 }
 
-// Componente de tarea arrastrable
 function SortableTaskCard({ task, children }: { task: Task; children: React.ReactNode }) {
   const {
     attributes,
@@ -76,12 +76,14 @@ const TaskManager = () => {
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   
-  // NUEVO: Tracking de campos activos para proteger de reloads
-  const [focusedFields, setFocusedFields] = useState<Set<string>>(new Set());
-  const [localNotes, setLocalNotes] = useState<{ [key: string]: string }>({});
-  const saveTimersRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  // Protección contra actualizaciones Realtime mientras se edita
+  const [focusedFieldId, setFocusedFieldId] = useState<string | null>(null);
+  const [localEdits, setLocalEdits] = useState<{ [taskId: string]: { notes?: string } }>({});
   
-  const lastLoadRef = useRef<number>(0);
+  // Refs para debounce y canal Realtime
+  const saveTimersRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  const channelRef = useRef<any>(null);
+  
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -97,51 +99,25 @@ const TaskManager = () => {
     setCurrentUser(username);
     
     // Carga inicial
-    const loadInitialTasks = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('*')
-          .order('order', { ascending: true })
-          .order('created_at', { ascending: false });
-
-        if (!error && data) {
-          const tasksWithDefaults = data.map(task => ({
-            ...task,
-            notes: task.notes || "",
-            subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
-            order: task.order || 0
-          }));
-          setTasks(tasksWithDefaults);
-          lastLoadRef.current = Date.now();
-        }
-      } catch (err) {
-        console.error("Error inicial:", err);
-      }
-    };
+    loadTasks(username);
     
-    loadInitialTasks();
-
-    // Polling reducido a 2 segundos para actualizaciones más rápidas
-    const interval = setInterval(() => {
-      loadTasks();
-    }, 2000);
-
+    // Configurar Supabase Realtime
+    setupRealtimeSubscription(username);
+    
     return () => {
-      clearInterval(interval);
-      // Limpiar todos los timers pendientes
+      // Limpiar suscripción
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+      // Limpiar timers
       Object.values(saveTimersRef.current).forEach(timer => clearTimeout(timer));
     };
-  }, []); // SIN DEPENDENCIAS - solo ejecutar una vez
+  }, []);
 
-  const loadTasks = async () => {
-    // PROTECCIÓN: No recargar si hay campos activos
-    if (focusedFields.size > 0) {
-      console.log('⏸️ Reloading pausado - campos activos:', focusedFields.size);
-      return;
-    }
-
+  const loadTasks = async (username?: string) => {
     try {
+      console.log("📥 Carga inicial de tareas compartidas");
+      
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
@@ -149,7 +125,7 @@ const TaskManager = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error("Error al cargar tareas:", error);
+        console.error("❌ Error:", error);
         return;
       }
 
@@ -161,9 +137,64 @@ const TaskManager = () => {
       }));
 
       setTasks(tasksWithDefaults);
-      lastLoadRef.current = Date.now();
+      console.log("✅ Tareas compartidas cargadas:", tasksWithDefaults.length);
     } catch (err) {
-      console.error("Error inesperado:", err);
+      console.error("❌ Error:", err);
+    }
+  };
+
+  const setupRealtimeSubscription = (username: string) => {
+    console.log("🔌 Configurando Realtime para tareas compartidas...");
+    
+    const channel = supabase
+      .channel('tasks_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks'
+          // SIN FILTRO - Compartidas por todos
+        },
+        (payload: RealtimePostgresChangesPayload<Task>) => {
+          console.log("🔥 Cambio Realtime:", payload.eventType);
+          handleRealtimeChange(payload);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log("✅ Realtime activo para Operaciones");
+        }
+      });
+
+    channelRef.current = channel;
+  };
+
+  const handleRealtimeChange = (payload: RealtimePostgresChangesPayload<Task>) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+
+    if (eventType === 'INSERT' && newRecord) {
+      setTasks(prev => {
+        if (prev.some(t => t.id === newRecord.id)) return prev;
+        return [{ ...newRecord, subtasks: newRecord.subtasks || [] }, ...prev];
+      });
+    } else if (eventType === 'UPDATE' && newRecord) {
+      setTasks(prev => prev.map(task => {
+        if (task.id !== newRecord.id) return task;
+        
+        // PROTECCIÓN: No sobrescribir campo activo
+        if (focusedFieldId === `notes-${newRecord.id}`) {
+          return {
+            ...newRecord,
+            notes: localEdits[newRecord.id]?.notes ?? newRecord.notes,
+            subtasks: newRecord.subtasks || []
+          };
+        }
+        
+        return { ...newRecord, subtasks: newRecord.subtasks || [] };
+      }));
+    } else if (eventType === 'DELETE' && oldRecord) {
+      setTasks(prev => prev.filter(task => task.id !== oldRecord.id));
     }
   };
 
@@ -182,35 +213,25 @@ const TaskManager = () => {
 
     if (!activeTask || !overTask) return;
 
-    // Si se mueve entre columnas (pendiente <-> completada)
+    // OPTIMISTIC UI
     if (activeTask.completed !== overTask.completed) {
-      // OPTIMISTIC UI: Actualizar inmediatamente
       setTasks(prev => prev.map(t => 
-        t.id === activeTask.id 
-          ? { ...t, completed: overTask.completed }
-          : t
+        t.id === activeTask.id ? { ...t, completed: overTask.completed } : t
       ));
 
       try {
-        const { error } = await supabase
+        await supabase
           .from('tasks')
           .update({ completed: overTask.completed })
-          .eq('id', activeTask.id);
-
-        if (error) {
-          console.error("Error:", error);
-          // Revertir
-          setTasks(prev => prev.map(t => 
-            t.id === activeTask.id 
-              ? { ...t, completed: activeTask.completed }
-              : t
-          ));
-        }
+          .eq('id', activeTask.id)
+          .eq('created_by', currentUser);
       } catch (err) {
         console.error("Error:", err);
+        setTasks(prev => prev.map(t => 
+          t.id === activeTask.id ? { ...t, completed: activeTask.completed } : t
+        ));
       }
     } else {
-      // Reordenar dentro de la misma columna
       const taskList = tasks.filter(t => t.completed === activeTask.completed);
       const oldIndex = taskList.findIndex(t => t.id === active.id);
       const newIndex = taskList.findIndex(t => t.id === over.id);
@@ -220,7 +241,6 @@ const TaskManager = () => {
         const [removed] = reordered.splice(oldIndex, 1);
         reordered.splice(newIndex, 0, removed);
 
-        // OPTIMISTIC UI: Actualizar orden inmediatamente
         const otherTasks = tasks.filter(t => t.completed !== activeTask.completed);
         const newTaskList = reordered.map((task, index) => ({ ...task, order: index }));
         setTasks([...newTaskList, ...otherTasks].sort((a, b) => {
@@ -228,39 +248,25 @@ const TaskManager = () => {
           return (a.order || 0) - (b.order || 0);
         }));
 
-        // Actualizar en background
-        const updates = reordered.map((task, index) => ({
-          id: task.id,
-          order: index
-        }));
-
         try {
-          for (const update of updates) {
+          for (const [index, task] of reordered.entries()) {
             await supabase
               .from('tasks')
-              .update({ order: update.order })
-              .eq('id', update.id);
+              .update({ order: index })
+              .eq('id', task.id)
+              .eq('created_by', currentUser);
           }
         } catch (err) {
           console.error("Error:", err);
-          // Recargar si falla
-          await loadTasks();
         }
       }
     }
   };
 
   const addTask = async () => {
-    if (!newTaskText.trim()) {
-      toast({
-        title: "Campo vacío",
-        description: "Por favor ingresa un texto para la tarea",
-        variant: "destructive"
-      });
-      return;
-    }
-
+    if (!newTaskText.trim()) return;
     if (isLoading) return;
+    
     setIsLoading(true);
 
     const newTask: Task = {
@@ -274,122 +280,101 @@ const TaskManager = () => {
       order: 0
     };
 
-    // OPTIMISTIC UI: Actualizar inmediatamente
+    // OPTIMISTIC UI
     setTasks(prev => [newTask, ...prev]);
     setNewTaskText("");
-    
-    toast({
-      title: "✅ Tarea creada",
-      description: "La tarea se ha agregado",
-    });
 
     try {
       const { error } = await supabase
         .from('tasks')
-        .insert([newTask])
-        .select();
+        .insert([newTask]);
       
       if (error) {
-        console.error("Error:", error);
-        // Revertir cambio optimista
         setTasks(prev => prev.filter(t => t.id !== newTask.id));
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
-        // Recargar para sincronizar
-        await loadTasks();
+        toast({ title: "✅ Tarea creada" });
       }
     } catch (err) {
-      console.error("Error:", err);
-      // Revertir cambio optimista
       setTasks(prev => prev.filter(t => t.id !== newTask.id));
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al crear la tarea",
-        variant: "destructive"
-      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const updateTaskText = async (taskId: string, newText: string) => {
-    if (!newText.trim()) {
-      toast({
-        title: "Campo vacío",
-        description: "El nombre de la tarea no puede estar vacío",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!newText.trim()) return;
+
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, text: newText } : t));
+    setEditingTaskId(null);
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
         .update({ text: newText })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-        toast({
-          title: "Error",
-          description: "No se pudo actualizar la tarea",
-          variant: "destructive"
-        });
-      } else {
-        await loadTasks();
-        setEditingTaskId(null);
-        toast({
-          title: "✅ Actualizado",
-          description: "El nombre de la tarea se actualizó",
-        });
-      }
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
-  const updateTaskNotes = async (taskId: string, notes: string) => {
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ notes })
-        .eq('id', taskId);
-
-      if (!error) {
-        console.log("✅ Notas guardadas");
-      }
-    } catch (err) {
-      console.error("Error:", err);
-    }
-  };
-
-  // NUEVO: Función con debounce para guardar notas
   const debouncedSaveNotes = (taskId: string, notes: string) => {
-    // Cancelar timer anterior si existe
     if (saveTimersRef.current[`notes-${taskId}`]) {
       clearTimeout(saveTimersRef.current[`notes-${taskId}`]);
     }
 
-    // Crear nuevo timer - espera 800ms después de dejar de escribir
-    saveTimersRef.current[`notes-${taskId}`] = setTimeout(() => {
-      updateTaskNotes(taskId, notes);
+    saveTimersRef.current[`notes-${taskId}`] = setTimeout(async () => {
+      try {
+        await supabase
+          .from('tasks')
+          .update({ notes })
+          .eq('id', taskId)
+          .eq('created_by', currentUser);
+        
+        console.log("✅ Notas guardadas (debounce)");
+      } catch (err) {
+        console.error("Error:", err);
+      }
       delete saveTimersRef.current[`notes-${taskId}`];
-    }, 800);
+    }, 1500);
+  };
+
+  const handleNotesChange = (taskId: string, value: string) => {
+    setLocalEdits(prev => ({ ...prev, [taskId]: { notes: value } }));
+    debouncedSaveNotes(taskId, value);
+  };
+
+  const handleNotesFocus = (taskId: string) => {
+    setFocusedFieldId(`notes-${taskId}`);
+  };
+
+  const handleNotesBlur = async (taskId: string, value: string) => {
+    setFocusedFieldId(null);
+    
+    if (saveTimersRef.current[`notes-${taskId}`]) {
+      clearTimeout(saveTimersRef.current[`notes-${taskId}`]);
+    }
+
+    try {
+      await supabase
+        .from('tasks')
+        .update({ notes: value })
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
+      
+      setLocalEdits(prev => {
+        const newEdits = { ...prev };
+        delete newEdits[taskId];
+        return newEdits;
+      });
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
   const addSubtask = async (taskId: string, subtaskText: string) => {
-    if (!subtaskText.trim()) {
-      toast({
-        title: "Campo vacío",
-        description: "Ingresa un texto para la subtarea",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!subtaskText.trim()) return;
 
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -401,37 +386,21 @@ const TaskManager = () => {
     };
 
     const updatedSubtasks = [...task.subtasks, newSubtask];
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-        toast({
-          title: "Error",
-          description: "No se pudo crear la subtarea",
-          variant: "destructive"
-        });
-      } else {
-        await loadTasks();
-      }
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
   const updateSubtaskText = async (taskId: string, subtaskId: string, newText: string) => {
-    if (!newText.trim()) {
-      toast({
-        title: "Campo vacío",
-        description: "El nombre de la subtarea no puede estar vacío",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!newText.trim()) return;
 
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -440,22 +409,15 @@ const TaskManager = () => {
       st.id === subtaskId ? { ...st, text: newText } : st
     );
 
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t));
+    setEditingSubtaskId(null);
+
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-      } else {
-        await loadTasks();
-        setEditingSubtaskId(null);
-        toast({
-          title: "✅ Actualizado",
-          description: "El nombre de la subtarea se actualizó",
-        });
-      }
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
     } catch (err) {
       console.error("Error:", err);
     }
@@ -469,23 +431,18 @@ const TaskManager = () => {
       st.id === subtaskId ? { ...st, completed: !st.completed } : st
     );
 
-    const allSubtasksComplete = updatedSubtasks.length > 0 && 
-      updatedSubtasks.every(st => st.completed);
+    const allComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
+
+    setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, subtasks: updatedSubtasks, completed: allComplete } : t
+    ));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
-        .update({ 
-          subtasks: updatedSubtasks,
-          completed: allSubtasksComplete 
-        })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-      } else {
-        await loadTasks();
-      }
+        .update({ subtasks: updatedSubtasks, completed: allComplete })
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
     } catch (err) {
       console.error("Error:", err);
     }
@@ -496,22 +453,14 @@ const TaskManager = () => {
     if (!task) return;
 
     const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-      } else {
-        await loadTasks();
-        toast({
-          title: "Subtarea eliminada",
-          description: "La subtarea se eliminó correctamente",
-        });
-      }
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
     } catch (err) {
       console.error("Error:", err);
     }
@@ -522,64 +471,32 @@ const TaskManager = () => {
     if (!task) return;
 
     const newCompleted = !task.completed;
-    const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
-
-    // OPTIMISTIC UI: Actualizar inmediatamente
-    setTasks(prev => prev.map(t => 
-      t.id === taskId 
-        ? { ...t, completed: newCompleted, subtasks: updatedSubtasks }
-        : t
-    ));
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('tasks')
-        .update({ 
-          completed: newCompleted,
-          subtasks: updatedSubtasks 
-        })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error:", error);
-        // Revertir cambio optimista
-        setTasks(prev => prev.map(t => 
-          t.id === taskId 
-            ? { ...t, completed: task.completed, subtasks: task.subtasks }
-            : t
-        ));
-      }
+        .update({ completed: newCompleted })
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
     } catch (err) {
       console.error("Error:", err);
-      // Revertir cambio optimista
-      setTasks(prev => prev.map(t => 
-        t.id === taskId 
-          ? { ...t, completed: task.completed, subtasks: task.subtasks }
-          : t
-      ));
     }
   };
 
   const deleteTask = async (taskId: string) => {
+    const taskToDelete = tasks.find(t => t.id === taskId);
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+
     try {
       const { error } = await supabase
         .from('tasks')
         .delete()
-        .eq('id', taskId);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
       
-      if (error) {
-        console.error("Error:", error);
-        toast({
-          title: "Error",
-          description: "No se pudo eliminar la tarea",
-          variant: "destructive"
-        });
-      } else {
-        await loadTasks();
-        toast({
-          title: "Tarea eliminada",
-          description: "La tarea se eliminó correctamente",
-        });
+      if (error && taskToDelete) {
+        setTasks(prev => [...prev, taskToDelete]);
       }
     } catch (err) {
       console.error("Error:", err);
@@ -612,20 +529,14 @@ const TaskManager = () => {
     const progress = getSubtaskProgress(task);
     const isEditingTask = editingTaskId === task.id;
     
-    const notesRef = useRef<HTMLTextAreaElement>(null);
     const subtaskInputRef = useRef<HTMLInputElement>(null);
+    const notesValue = localEdits[task.id]?.notes ?? task.notes;
 
     return (
-      <div
-        className={`border rounded-lg p-3 transition-all ${
-          task.completed 
-            ? "bg-[#1a1a1a] border-[#2a2a2a]" 
-            : "bg-[#0f0f0f] border-[#2a2a2a] hover:border-[#3a3a3a]"
-        }`}
-      >
-        {/* Header de la tarea */}
+      <div className={`border rounded-lg p-3 transition-all ${
+        task.completed ? "bg-[#1a1a1a] border-[#2a2a2a]" : "bg-[#0f0f0f] border-[#2a2a2a] hover:border-[#3a3a3a]"
+      }`}>
         <div className="flex items-center gap-3">
-          {/* CHECKBOX A LA IZQUIERDA */}
           <Checkbox
             checked={task.completed}
             onCheckedChange={() => toggleTaskComplete(task.id)}
@@ -633,7 +544,6 @@ const TaskManager = () => {
           />
           
           <div className="flex-1 space-y-2">
-            {/* Nombre de la tarea (editable) */}
             {isEditingTask ? (
               <div className="flex gap-2">
                 <Input
@@ -645,19 +555,10 @@ const TaskManager = () => {
                   className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 text-sm h-8"
                   autoFocus
                 />
-                <Button
-                  size="sm"
-                  onClick={() => updateTaskText(task.id, editingText)}
-                  className="h-8 bg-green-600 hover:bg-green-700"
-                >
+                <Button size="sm" onClick={() => updateTaskText(task.id, editingText)} className="h-8 bg-green-600 hover:bg-green-700">
                   <Save className="h-3 w-3" />
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditingTaskId(null)}
-                  className="h-8"
-                >
+                <Button size="sm" variant="outline" onClick={() => setEditingTaskId(null)} className="h-8">
                   <X className="h-3 w-3" />
                 </Button>
               </div>
@@ -680,20 +581,15 @@ const TaskManager = () => {
               </div>
             )}
 
-            {/* Progreso de subtareas */}
             {progress && (
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <div className="flex-1 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-green-500 transition-all" 
-                    style={{ width: `${progress.percentage}%` }}
-                  />
+                  <div className="h-full bg-green-500 transition-all" style={{ width: `${progress.percentage}%` }} />
                 </div>
                 <span>{progress.completed}/{progress.total}</span>
               </div>
             )}
 
-            {/* Indicadores */}
             <div className="flex items-center gap-2 text-xs">
               <span className="text-gray-400">Por: {task.created_by}</span>
               {task.subtasks.length > 0 && (
@@ -709,86 +605,35 @@ const TaskManager = () => {
             </div>
           </div>
 
-          {/* Botones de acción A LA DERECHA */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleExpanded(task.id)}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-gray-200"
-            >
+            <Button variant="ghost" size="sm" onClick={() => toggleExpanded(task.id)} className="h-6 w-6 p-0 text-gray-400 hover:text-gray-200">
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => deleteTask(task.id)}
-              className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
-            >
+            <Button variant="ghost" size="sm" onClick={() => deleteTask(task.id)} className="h-6 w-6 p-0 text-red-400 hover:text-red-300">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        {/* Detalles expandidos */}
         {isExpanded && (
           <div className="ml-0 mt-3 space-y-3 pl-3 border-l-2 border-[#2a2a2a]">
-            {/* Notas */}
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
                 <StickyNote className="h-3 w-3" />
-                Notas (se guardan automáticamente al escribir)
+                Notas (guardado automático 1.5s)
               </label>
               <textarea
-                value={localNotes[task.id] ?? task.notes}
-                onFocus={() => {
-                  // PROTECCIÓN: Marcar campo como activo
-                  setFocusedFields(prev => new Set(prev).add(`notes-${task.id}`));
-                  // Inicializar nota local si no existe
-                  if (localNotes[task.id] === undefined) {
-                    setLocalNotes(prev => ({ ...prev, [task.id]: task.notes }));
-                  }
-                }}
-                onChange={(e) => {
-                  // Actualizar estado local inmediatamente
-                  const newValue = e.target.value;
-                  setLocalNotes(prev => ({ ...prev, [task.id]: newValue }));
-                  
-                  // DEBOUNCE: Cancelar guardado anterior
-                  if (saveTimersRef.current[`notes-${task.id}`]) {
-                    clearTimeout(saveTimersRef.current[`notes-${task.id}`]);
-                  }
-                  
-                  // DEBOUNCE: Guardar después de 800ms sin escribir
-                  saveTimersRef.current[`notes-${task.id}`] = setTimeout(() => {
-                    debouncedSaveNotes(task.id, newValue);
-                    delete saveTimersRef.current[`notes-${task.id}`];
-                  }, 800);
-                }}
-                onBlur={(e) => {
-                  // PROTECCIÓN: Desmarcar campo
-                  setFocusedFields(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(`notes-${task.id}`);
-                    return newSet;
-                  });
-                  
-                  // Guardar inmediatamente al salir
-                  if (saveTimersRef.current[`notes-${task.id}`]) {
-                    clearTimeout(saveTimersRef.current[`notes-${task.id}`]);
-                  }
-                  updateTaskNotes(task.id, e.target.value);
-                }}
-                placeholder="Agrega notas o recordatorios..."
+                value={notesValue}
+                onFocus={() => handleNotesFocus(task.id)}
+                onChange={(e) => handleNotesChange(task.id, e.target.value)}
+                onBlur={(e) => handleNotesBlur(task.id, e.target.value)}
+                placeholder="Agrega notas..."
                 className="w-full bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm min-h-[60px] p-2 rounded-md border border-gray-300 dark:border-[#2a2a2a] focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
               />
             </div>
 
-            {/* Subtareas */}
             <div>
-              <label className="text-xs text-gray-400 mb-2 block">
-                Subtareas
-              </label>
+              <label className="text-xs text-gray-400 mb-2 block">Subtareas</label>
               
               {task.subtasks.length > 0 && (
                 <div className="space-y-2 mb-2">
@@ -806,53 +651,30 @@ const TaskManager = () => {
                             value={editingSubtaskText}
                             onChange={(e) => setEditingSubtaskText(e.target.value)}
                             onKeyPress={(e) => {
-                              if (e.key === "Enter") {
-                                updateSubtaskText(task.id, subtask.id, editingSubtaskText);
-                              }
+                              if (e.key === "Enter") updateSubtaskText(task.id, subtask.id, editingSubtaskText);
                             }}
                             className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 text-xs h-7"
                             autoFocus
                           />
-                          <Button
-                            size="sm"
-                            onClick={() => updateSubtaskText(task.id, subtask.id, editingSubtaskText)}
-                            className="h-7 px-2 bg-green-600 hover:bg-green-700"
-                          >
+                          <Button size="sm" onClick={() => updateSubtaskText(task.id, subtask.id, editingSubtaskText)} className="h-7 px-2 bg-green-600 hover:bg-green-700">
                             <Save className="h-3 w-3" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditingSubtaskId(null)}
-                            className="h-7 px-2"
-                          >
+                          <Button size="sm" variant="outline" onClick={() => setEditingSubtaskId(null)} className="h-7 px-2">
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
                       ) : (
                         <>
-                          <p className={`text-xs flex-1 ${
-                            subtask.completed ? "line-through text-gray-500" : "text-gray-300"
-                          }`}>
+                          <p className={`text-xs flex-1 ${subtask.completed ? "line-through text-gray-500" : "text-gray-300"}`}>
                             {subtask.text}
                           </p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditingSubtaskId(subtask.id);
-                              setEditingSubtaskText(subtask.text);
-                            }}
-                            className="h-6 w-6 p-0 text-blue-400 hover:text-blue-300"
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => {
+                            setEditingSubtaskId(subtask.id);
+                            setEditingSubtaskText(subtask.text);
+                          }} className="h-6 w-6 p-0 text-blue-400 hover:text-blue-300">
                             <Edit2 className="h-3 w-3" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteSubtask(task.id, subtask.id)}
-                            className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => deleteSubtask(task.id, subtask.id)} className="h-6 w-6 p-0 text-red-400 hover:text-red-300">
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </>
@@ -862,22 +684,11 @@ const TaskManager = () => {
                 </div>
               )}
 
-              {/* Agregar nueva subtarea */}
               <div className="flex gap-2">
                 <input
                   ref={subtaskInputRef}
                   type="text"
                   placeholder="Agregar subtarea..."
-                  onFocus={() => {
-                    setFocusedFields(prev => new Set(prev).add(`subtask-input-${task.id}`));
-                  }}
-                  onBlur={() => {
-                    setFocusedFields(prev => {
-                      const newSet = new Set(prev);
-                      newSet.delete(`subtask-input-${task.id}`);
-                      return newSet;
-                    });
-                  }}
                   onKeyPress={(e) => {
                     if (e.key === "Enter" && subtaskInputRef.current) {
                       addSubtask(task.id, subtaskInputRef.current.value);
@@ -910,19 +721,13 @@ const TaskManager = () => {
   const activeTask = tasks.find(t => t.id === activeId);
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="space-y-6">
-        {/* Header con input */}
         <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
           <CardHeader className="pb-4">
             <CardTitle className="text-white">Tareas de Operaciones</CardTitle>
             <p className="text-xs text-gray-400 mt-1">
-              👥 Compartidas • 📝 Con subtareas y notas • 🔄 Arrastra para reorganizar
+              👥 Compartidas • ⚡ Realtime • 📝 Debounce 1.5s • 🎯 Optimistic UI
             </p>
           </CardHeader>
           <CardContent>
@@ -931,25 +736,11 @@ const TaskManager = () => {
                 placeholder="¿Qué necesita hacer el equipo?"
                 value={newTaskText}
                 onChange={(e) => setNewTaskText(e.target.value)}
-                onFocus={() => {
-                  setFocusedFields(prev => new Set(prev).add('new-task-input'));
-                }}
-                onBlur={() => {
-                  setFocusedFields(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete('new-task-input');
-                    return newSet;
-                  });
-                }}
                 onKeyPress={(e) => e.key === "Enter" && !isLoading && addTask()}
                 className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 disabled={isLoading}
               />
-              <Button
-                onClick={addTask}
-                disabled={isLoading}
-                className="bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black flex-shrink-0"
-              >
+              <Button onClick={addTask} disabled={isLoading} className="bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black flex-shrink-0">
                 <Plus className="h-4 w-4 mr-2" />
                 {isLoading ? "Guardando..." : "Agregar"}
               </Button>
@@ -957,19 +748,15 @@ const TaskManager = () => {
           </CardContent>
         </Card>
 
-        {/* Tablero Horizontal */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Columna: En Proceso */}
           <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  En Proceso
-                  <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
-                    {pendingTasks.length}
-                  </span>
-                </CardTitle>
-              </div>
+              <CardTitle className="text-white text-lg flex items-center gap-2">
+                En Proceso
+                <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
+                  {pendingTasks.length}
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <SortableContext items={pendingTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
@@ -991,24 +778,21 @@ const TaskManager = () => {
             </CardContent>
           </Card>
 
-          {/* Columna: Finalizadas */}
           <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  Finalizadas
-                  <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">
-                    {completedTasks.length}
-                  </span>
-                </CardTitle>
-              </div>
+              <CardTitle className="text-white text-lg flex items-center gap-2">
+                Finalizadas
+                <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">
+                  {completedTasks.length}
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <SortableContext items={completedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-2 max-h-[700px] overflow-y-auto">
                   {completedTasks.length === 0 ? (
                     <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
-                      <p>Aún no hay tareas completadas</p>
+                      <p>Aún no has completado tareas</p>
                     </div>
                   ) : (
                     completedTasks.map(task => (
