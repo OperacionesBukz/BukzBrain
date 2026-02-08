@@ -22,6 +22,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 interface Subtask {
   id: string;
@@ -75,6 +76,14 @@ const PersonalTaskBoard = () => {
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   
+  // Protección contra actualizaciones Realtime mientras se edita
+  const [focusedFieldId, setFocusedFieldId] = useState<string | null>(null);
+  const [localEdits, setLocalEdits] = useState<{ [taskId: string]: { notes?: string } }>({});
+  
+  // Refs para debounce y canal Realtime
+  const saveTimersRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  const channelRef = useRef<any>(null);
+  
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -88,14 +97,21 @@ const PersonalTaskBoard = () => {
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
+    
+    // Carga inicial
     loadTasks(username);
-
-    // Polling cada 5 segundos
-    const interval = setInterval(() => {
-      loadTasks(username);
-    }, 5000);
-
-    return () => clearInterval(interval);
+    
+    // Configurar Supabase Realtime
+    setupRealtimeSubscription(username);
+    
+    return () => {
+      // Limpiar suscripción
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+      // Limpiar timers
+      Object.values(saveTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
   }, []);
 
   const loadTasks = async (username?: string) => {
@@ -103,26 +119,19 @@ const PersonalTaskBoard = () => {
     if (!user) return;
 
     try {
-      console.log("📥 Cargando tareas para:", user);
+      console.log("📥 Carga inicial para:", user);
       
       const { data, error } = await supabase
         .from('personal_tasks')
         .select('*')
         .eq('created_by', user)
         .order('order', { ascending: true })
-        .order('created_at', { ascending: false});
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error("❌ Error al cargar tareas:", error);
-        toast({
-          title: "Error al cargar",
-          description: error.message,
-          variant: "destructive"
-        });
+        console.error("❌ Error:", error);
         return;
       }
-
-      console.log("✅ Tareas cargadas:", data?.length || 0);
 
       const tasksWithDefaults = (data || []).map(task => ({
         ...task,
@@ -132,8 +141,64 @@ const PersonalTaskBoard = () => {
       }));
 
       setTasks(tasksWithDefaults);
+      console.log("✅ Tareas cargadas:", tasksWithDefaults.length);
     } catch (err) {
-      console.error("❌ Error inesperado:", err);
+      console.error("❌ Error:", err);
+    }
+  };
+
+  const setupRealtimeSubscription = (username: string) => {
+    console.log("🔌 Configurando Realtime...");
+    
+    const channel = supabase
+      .channel('personal_tasks_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'personal_tasks',
+          filter: `created_by=eq.${username}`
+        },
+        (payload: RealtimePostgresChangesPayload<Task>) => {
+          console.log("🔥 Cambio Realtime:", payload.eventType);
+          handleRealtimeChange(payload);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log("✅ Realtime activo");
+        }
+      });
+
+    channelRef.current = channel;
+  };
+
+  const handleRealtimeChange = (payload: RealtimePostgresChangesPayload<Task>) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+
+    if (eventType === 'INSERT' && newRecord) {
+      setTasks(prev => {
+        if (prev.some(t => t.id === newRecord.id)) return prev;
+        return [{ ...newRecord, subtasks: newRecord.subtasks || [] }, ...prev];
+      });
+    } else if (eventType === 'UPDATE' && newRecord) {
+      setTasks(prev => prev.map(task => {
+        if (task.id !== newRecord.id) return task;
+        
+        // PROTECCIÓN: No sobrescribir campo activo
+        if (focusedFieldId === `notes-${newRecord.id}`) {
+          return {
+            ...newRecord,
+            notes: localEdits[newRecord.id]?.notes ?? newRecord.notes,
+            subtasks: newRecord.subtasks || []
+          };
+        }
+        
+        return { ...newRecord, subtasks: newRecord.subtasks || [] };
+      }));
+    } else if (eventType === 'DELETE' && oldRecord) {
+      setTasks(prev => prev.filter(task => task.id !== oldRecord.id));
     }
   };
 
@@ -152,19 +217,23 @@ const PersonalTaskBoard = () => {
 
     if (!activeTask || !overTask) return;
 
+    // OPTIMISTIC UI
     if (activeTask.completed !== overTask.completed) {
+      setTasks(prev => prev.map(t => 
+        t.id === activeTask.id ? { ...t, completed: overTask.completed } : t
+      ));
+
       try {
-        const { error } = await supabase
+        await supabase
           .from('personal_tasks')
           .update({ completed: overTask.completed })
           .eq('id', activeTask.id)
           .eq('created_by', currentUser);
-
-        if (!error) {
-          loadTasks();
-        }
       } catch (err) {
         console.error("Error:", err);
+        setTasks(prev => prev.map(t => 
+          t.id === activeTask.id ? { ...t, completed: activeTask.completed } : t
+        ));
       }
     } else {
       const taskList = tasks.filter(t => t.completed === activeTask.completed);
@@ -176,20 +245,21 @@ const PersonalTaskBoard = () => {
         const [removed] = reordered.splice(oldIndex, 1);
         reordered.splice(newIndex, 0, removed);
 
-        const updates = reordered.map((task, index) => ({
-          id: task.id,
-          order: index
+        const otherTasks = tasks.filter(t => t.completed !== activeTask.completed);
+        const newTaskList = reordered.map((task, index) => ({ ...task, order: index }));
+        setTasks([...newTaskList, ...otherTasks].sort((a, b) => {
+          if (a.completed !== b.completed) return a.completed ? 1 : -1;
+          return (a.order || 0) - (b.order || 0);
         }));
 
         try {
-          for (const update of updates) {
+          for (const [index, task] of reordered.entries()) {
             await supabase
               .from('personal_tasks')
-              .update({ order: update.order })
-              .eq('id', update.id)
+              .update({ order: index })
+              .eq('id', task.id)
               .eq('created_by', currentUser);
           }
-          loadTasks();
         } catch (err) {
           console.error("Error:", err);
         }
@@ -198,16 +268,9 @@ const PersonalTaskBoard = () => {
   };
 
   const addTask = async () => {
-    if (!newTaskText.trim()) {
-      toast({
-        title: "Campo vacío",
-        description: "Por favor ingresa un texto para la tarea",
-        variant: "destructive"
-      });
-      return;
-    }
-
+    if (!newTaskText.trim()) return;
     if (isLoading) return;
+    
     setIsLoading(true);
 
     const newTask: Task = {
@@ -221,109 +284,101 @@ const PersonalTaskBoard = () => {
       order: 0
     };
 
-    console.log("💾 Guardando tarea:", newTask);
+    // OPTIMISTIC UI
+    setTasks(prev => [newTask, ...prev]);
+    setNewTaskText("");
 
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('personal_tasks')
-        .insert([newTask])
-        .select();
+        .insert([newTask]);
       
       if (error) {
-        console.error("❌ Error al guardar:", error);
-        toast({
-          title: "Error al guardar",
-          description: error.message,
-          variant: "destructive"
-        });
+        setTasks(prev => prev.filter(t => t.id !== newTask.id));
+        toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
-        console.log("✅ Tarea guardada:", data);
-        setNewTaskText("");
-        toast({
-          title: "✅ Tarea creada",
-          description: "La tarea se ha agregado correctamente",
-        });
-        // Recargar tareas
-        await loadTasks();
+        toast({ title: "✅ Tarea creada" });
       }
     } catch (err) {
-      console.error("❌ Error inesperado:", err);
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al crear la tarea",
-        variant: "destructive"
-      });
+      setTasks(prev => prev.filter(t => t.id !== newTask.id));
     } finally {
       setIsLoading(false);
     }
   };
 
   const updateTaskText = async (taskId: string, newText: string) => {
-    if (!newText.trim()) {
-      toast({
-        title: "Campo vacío",
-        description: "El nombre de la tarea no puede estar vacío",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!newText.trim()) return;
+
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, text: newText } : t));
+    setEditingTaskId(null);
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('personal_tasks')
         .update({ text: newText })
         .eq('id', taskId)
         .eq('created_by', currentUser);
-
-      if (error) {
-        console.error("Error:", error);
-        toast({
-          title: "Error",
-          description: "No se pudo actualizar la tarea",
-          variant: "destructive"
-        });
-      } else {
-        await loadTasks();
-        setEditingTaskId(null);
-        toast({
-          title: "✅ Actualizado",
-          description: "El nombre de la tarea se actualizó",
-        });
-      }
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
-  const updateTaskNotes = async (taskId: string, notes: string) => {
+  const debouncedSaveNotes = (taskId: string, notes: string) => {
+    if (saveTimersRef.current[`notes-${taskId}`]) {
+      clearTimeout(saveTimersRef.current[`notes-${taskId}`]);
+    }
+
+    saveTimersRef.current[`notes-${taskId}`] = setTimeout(async () => {
+      try {
+        await supabase
+          .from('personal_tasks')
+          .update({ notes })
+          .eq('id', taskId)
+          .eq('created_by', currentUser);
+        
+        console.log("✅ Notas guardadas (debounce)");
+      } catch (err) {
+        console.error("Error:", err);
+      }
+      delete saveTimersRef.current[`notes-${taskId}`];
+    }, 1500);
+  };
+
+  const handleNotesChange = (taskId: string, value: string) => {
+    setLocalEdits(prev => ({ ...prev, [taskId]: { notes: value } }));
+    debouncedSaveNotes(taskId, value);
+  };
+
+  const handleNotesFocus = (taskId: string) => {
+    setFocusedFieldId(`notes-${taskId}`);
+  };
+
+  const handleNotesBlur = async (taskId: string, value: string) => {
+    setFocusedFieldId(null);
+    
+    if (saveTimersRef.current[`notes-${taskId}`]) {
+      clearTimeout(saveTimersRef.current[`notes-${taskId}`]);
+    }
+
     try {
-      console.log("💾 Guardando notas para tarea:", taskId);
-      
-      const { error } = await supabase
+      await supabase
         .from('personal_tasks')
-        .update({ notes })
+        .update({ notes: value })
         .eq('id', taskId)
         .eq('created_by', currentUser);
-
-      if (!error) {
-        console.log("✅ Notas guardadas");
-      } else {
-        console.error("❌ Error al guardar notas:", error);
-      }
+      
+      setLocalEdits(prev => {
+        const newEdits = { ...prev };
+        delete newEdits[taskId];
+        return newEdits;
+      });
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
   const addSubtask = async (taskId: string, subtaskText: string) => {
-    if (!subtaskText.trim()) {
-      toast({
-        title: "Campo vacío",
-        description: "Ingresa un texto para la subtarea",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!subtaskText.trim()) return;
 
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -335,38 +390,21 @@ const PersonalTaskBoard = () => {
     };
 
     const updatedSubtasks = [...task.subtasks, newSubtask];
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
         .eq('id', taskId)
         .eq('created_by', currentUser);
-
-      if (error) {
-        console.error("Error:", error);
-        toast({
-          title: "Error",
-          description: "No se pudo crear la subtarea",
-          variant: "destructive"
-        });
-      } else {
-        await loadTasks();
-      }
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
   const updateSubtaskText = async (taskId: string, subtaskId: string, newText: string) => {
-    if (!newText.trim()) {
-      toast({
-        title: "Campo vacío",
-        description: "El nombre de la subtarea no puede estar vacío",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!newText.trim()) return;
 
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -375,23 +413,15 @@ const PersonalTaskBoard = () => {
       st.id === subtaskId ? { ...st, text: newText } : st
     );
 
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t));
+    setEditingSubtaskId(null);
+
     try {
-      const { error } = await supabase
+      await supabase
         .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
         .eq('id', taskId)
         .eq('created_by', currentUser);
-
-      if (error) {
-        console.error("Error:", error);
-      } else {
-        await loadTasks();
-        setEditingSubtaskId(null);
-        toast({
-          title: "✅ Actualizado",
-          description: "El nombre de la subtarea se actualizó",
-        });
-      }
     } catch (err) {
       console.error("Error:", err);
     }
@@ -405,24 +435,18 @@ const PersonalTaskBoard = () => {
       st.id === subtaskId ? { ...st, completed: !st.completed } : st
     );
 
-    const allSubtasksComplete = updatedSubtasks.length > 0 && 
-      updatedSubtasks.every(st => st.completed);
+    const allComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
+
+    setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, subtasks: updatedSubtasks, completed: allComplete } : t
+    ));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('personal_tasks')
-        .update({ 
-          subtasks: updatedSubtasks,
-          completed: allSubtasksComplete 
-        })
+        .update({ subtasks: updatedSubtasks, completed: allComplete })
         .eq('id', taskId)
         .eq('created_by', currentUser);
-
-      if (error) {
-        console.error("Error:", error);
-      } else {
-        await loadTasks();
-      }
     } catch (err) {
       console.error("Error:", err);
     }
@@ -433,23 +457,14 @@ const PersonalTaskBoard = () => {
     if (!task) return;
 
     const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
         .eq('id', taskId)
         .eq('created_by', currentUser);
-
-      if (error) {
-        console.error("Error:", error);
-      } else {
-        await loadTasks();
-        toast({
-          title: "Subtarea eliminada",
-          description: "La subtarea se eliminó correctamente",
-        });
-      }
     } catch (err) {
       console.error("Error:", err);
     }
@@ -460,29 +475,23 @@ const PersonalTaskBoard = () => {
     if (!task) return;
 
     const newCompleted = !task.completed;
-    const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t));
 
     try {
-      const { error } = await supabase
+      await supabase
         .from('personal_tasks')
-        .update({ 
-          completed: newCompleted,
-          subtasks: updatedSubtasks 
-        })
+        .update({ completed: newCompleted })
         .eq('id', taskId)
         .eq('created_by', currentUser);
-
-      if (error) {
-        console.error("Error:", error);
-      } else {
-        await loadTasks();
-      }
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
   const deleteTask = async (taskId: string) => {
+    const taskToDelete = tasks.find(t => t.id === taskId);
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+
     try {
       const { error } = await supabase
         .from('personal_tasks')
@@ -490,19 +499,8 @@ const PersonalTaskBoard = () => {
         .eq('id', taskId)
         .eq('created_by', currentUser);
       
-      if (error) {
-        console.error("Error:", error);
-        toast({
-          title: "Error",
-          description: "No se pudo eliminar la tarea",
-          variant: "destructive"
-        });
-      } else {
-        await loadTasks();
-        toast({
-          title: "Tarea eliminada",
-          description: "La tarea se eliminó correctamente",
-        });
+      if (error && taskToDelete) {
+        setTasks(prev => [...prev, taskToDelete]);
       }
     } catch (err) {
       console.error("Error:", err);
@@ -536,15 +534,12 @@ const PersonalTaskBoard = () => {
     const isEditingTask = editingTaskId === task.id;
     
     const subtaskInputRef = useRef<HTMLInputElement>(null);
+    const notesValue = localEdits[task.id]?.notes ?? task.notes;
 
     return (
-      <div
-        className={`border rounded-lg p-3 transition-all ${
-          task.completed 
-            ? "bg-[#1a1a1a] border-[#2a2a2a]" 
-            : "bg-[#0f0f0f] border-[#2a2a2a] hover:border-[#3a3a3a]"
-        }`}
-      >
+      <div className={`border rounded-lg p-3 transition-all ${
+        task.completed ? "bg-[#1a1a1a] border-[#2a2a2a]" : "bg-[#0f0f0f] border-[#2a2a2a] hover:border-[#3a3a3a]"
+      }`}>
         <div className="flex items-center gap-3">
           <Checkbox
             checked={task.completed}
@@ -564,19 +559,10 @@ const PersonalTaskBoard = () => {
                   className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 text-sm h-8"
                   autoFocus
                 />
-                <Button
-                  size="sm"
-                  onClick={() => updateTaskText(task.id, editingText)}
-                  className="h-8 bg-green-600 hover:bg-green-700"
-                >
+                <Button size="sm" onClick={() => updateTaskText(task.id, editingText)} className="h-8 bg-green-600 hover:bg-green-700">
                   <Save className="h-3 w-3" />
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditingTaskId(null)}
-                  className="h-8"
-                >
+                <Button size="sm" variant="outline" onClick={() => setEditingTaskId(null)} className="h-8">
                   <X className="h-3 w-3" />
                 </Button>
               </div>
@@ -602,10 +588,7 @@ const PersonalTaskBoard = () => {
             {progress && (
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <div className="flex-1 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-green-500 transition-all" 
-                    style={{ width: `${progress.percentage}%` }}
-                  />
+                  <div className="h-full bg-green-500 transition-all" style={{ width: `${progress.percentage}%` }} />
                 </div>
                 <span>{progress.completed}/{progress.total}</span>
               </div>
@@ -626,20 +609,10 @@ const PersonalTaskBoard = () => {
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleExpanded(task.id)}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-gray-200"
-            >
+            <Button variant="ghost" size="sm" onClick={() => toggleExpanded(task.id)} className="h-6 w-6 p-0 text-gray-400 hover:text-gray-200">
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => deleteTask(task.id)}
-              className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
-            >
+            <Button variant="ghost" size="sm" onClick={() => deleteTask(task.id)} className="h-6 w-6 p-0 text-red-400 hover:text-red-300">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -647,28 +620,23 @@ const PersonalTaskBoard = () => {
 
         {isExpanded && (
           <div className="ml-0 mt-3 space-y-3 pl-3 border-l-2 border-[#2a2a2a]">
-            {/* Notas - SIMPLIFICADO */}
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
                 <StickyNote className="h-3 w-3" />
-                Notas (se guardan al salir del campo)
+                Notas (guardado automático 1.5s)
               </label>
               <textarea
-                key={task.id}
-                defaultValue={task.notes}
-                onBlur={(e) => {
-                  updateTaskNotes(task.id, e.target.value);
-                }}
-                placeholder="Agrega notas o recordatorios..."
+                value={notesValue}
+                onFocus={() => handleNotesFocus(task.id)}
+                onChange={(e) => handleNotesChange(task.id, e.target.value)}
+                onBlur={(e) => handleNotesBlur(task.id, e.target.value)}
+                placeholder="Agrega notas..."
                 className="w-full bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm min-h-[60px] p-2 rounded-md border border-gray-300 dark:border-[#2a2a2a] focus:outline-none focus:ring-2 focus:ring-[#F7DC6F] resize-y"
               />
             </div>
 
-            {/* Subtareas */}
             <div>
-              <label className="text-xs text-gray-400 mb-2 block">
-                Subtareas
-              </label>
+              <label className="text-xs text-gray-400 mb-2 block">Subtareas</label>
               
               {task.subtasks.length > 0 && (
                 <div className="space-y-2 mb-2">
@@ -686,53 +654,30 @@ const PersonalTaskBoard = () => {
                             value={editingSubtaskText}
                             onChange={(e) => setEditingSubtaskText(e.target.value)}
                             onKeyPress={(e) => {
-                              if (e.key === "Enter") {
-                                updateSubtaskText(task.id, subtask.id, editingSubtaskText);
-                              }
+                              if (e.key === "Enter") updateSubtaskText(task.id, subtask.id, editingSubtaskText);
                             }}
                             className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 text-xs h-7"
                             autoFocus
                           />
-                          <Button
-                            size="sm"
-                            onClick={() => updateSubtaskText(task.id, subtask.id, editingSubtaskText)}
-                            className="h-7 px-2 bg-green-600 hover:bg-green-700"
-                          >
+                          <Button size="sm" onClick={() => updateSubtaskText(task.id, subtask.id, editingSubtaskText)} className="h-7 px-2 bg-green-600 hover:bg-green-700">
                             <Save className="h-3 w-3" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditingSubtaskId(null)}
-                            className="h-7 px-2"
-                          >
+                          <Button size="sm" variant="outline" onClick={() => setEditingSubtaskId(null)} className="h-7 px-2">
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
                       ) : (
                         <>
-                          <p className={`text-xs flex-1 ${
-                            subtask.completed ? "line-through text-gray-500" : "text-gray-300"
-                          }`}>
+                          <p className={`text-xs flex-1 ${subtask.completed ? "line-through text-gray-500" : "text-gray-300"}`}>
                             {subtask.text}
                           </p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditingSubtaskId(subtask.id);
-                              setEditingSubtaskText(subtask.text);
-                            }}
-                            className="h-6 w-6 p-0 text-blue-400 hover:text-blue-300"
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => {
+                            setEditingSubtaskId(subtask.id);
+                            setEditingSubtaskText(subtask.text);
+                          }} className="h-6 w-6 p-0 text-blue-400 hover:text-blue-300">
                             <Edit2 className="h-3 w-3" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteSubtask(task.id, subtask.id)}
-                            className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => deleteSubtask(task.id, subtask.id)} className="h-6 w-6 p-0 text-red-400 hover:text-red-300">
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </>
@@ -742,7 +687,6 @@ const PersonalTaskBoard = () => {
                 </div>
               )}
 
-              {/* Agregar nueva subtarea */}
               <div className="flex gap-2">
                 <input
                   ref={subtaskInputRef}
@@ -780,18 +724,13 @@ const PersonalTaskBoard = () => {
   const activeTask = tasks.find(t => t.id === activeId);
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="space-y-6">
         <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
           <CardHeader className="pb-4">
             <CardTitle className="text-white">Mis Tareas Personales</CardTitle>
             <p className="text-xs text-gray-400 mt-1">
-              🔒 Privadas • 📝 Con subtareas y notas • 🔄 Arrastra para reorganizar
+              🔒 Privadas • ⚡ Realtime • 📝 Debounce 1.5s • 🎯 Optimistic UI
             </p>
           </CardHeader>
           <CardContent>
@@ -804,11 +743,7 @@ const PersonalTaskBoard = () => {
                 className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 disabled={isLoading}
               />
-              <Button
-                onClick={addTask}
-                disabled={isLoading}
-                className="bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black flex-shrink-0"
-              >
+              <Button onClick={addTask} disabled={isLoading} className="bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black flex-shrink-0">
                 <Plus className="h-4 w-4 mr-2" />
                 {isLoading ? "Guardando..." : "Agregar"}
               </Button>
@@ -819,14 +754,12 @@ const PersonalTaskBoard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  En Proceso
-                  <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
-                    {pendingTasks.length}
-                  </span>
-                </CardTitle>
-              </div>
+              <CardTitle className="text-white text-lg flex items-center gap-2">
+                En Proceso
+                <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
+                  {pendingTasks.length}
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <SortableContext items={pendingTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
@@ -850,14 +783,12 @@ const PersonalTaskBoard = () => {
 
           <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  Finalizadas
-                  <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">
-                    {completedTasks.length}
-                  </span>
-                </CardTitle>
-              </div>
+              <CardTitle className="text-white text-lg flex items-center gap-2">
+                Finalizadas
+                <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full">
+                  {completedTasks.length}
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <SortableContext items={completedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
