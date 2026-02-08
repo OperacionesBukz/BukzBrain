@@ -96,7 +96,7 @@ const PersonalTaskItem = memo(({
       className={`border rounded-lg p-3 transition-all ${
         task.completed 
           ? "dark:bg-green-900/20 dark:border-green-700/50 bg-green-50 border-green-200"
-          : "dark:bg-gray-800/50 dark:border-gray-700 dark:hover:border-gray-600 bg-white border-gray-200 hover:border-gray-300"
+          : "dark:bg-gray-800/50 dark:border-gray-700 dark:hover:border-gray-600 bg-gray-100 border-gray-300 hover:border-gray-400"
       }`}
     >
       {/* Header - Checkbox centrado verticalmente */}

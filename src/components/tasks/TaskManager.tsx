@@ -2,9 +2,8 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, StickyNote } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -18,7 +17,6 @@ interface Task {
   id: string;
   text: string;
   completed: boolean;
-  notes: string;
   subtasks: Subtask[];
   expanded: boolean;
   created_by: string;
@@ -45,7 +43,6 @@ const TaskManager = () => {
     
     loadTasks();
 
-    // Intentar Realtime primero
     console.log('📡 Intentando conectar con Realtime...');
     
     const channel = supabase
@@ -80,10 +77,8 @@ const TaskManager = () => {
         }
       });
 
-    // Polling como fallback
     let pollingInterval: NodeJS.Timeout;
     
-    // Esperar 3 segundos para ver si Realtime se conecta
     const pollingTimeout = setTimeout(() => {
       if (usePolling) {
         console.log('🔄 Iniciando polling cada 3 segundos...');
@@ -106,7 +101,6 @@ const TaskManager = () => {
     if (payload.eventType === 'INSERT') {
       const newTask = {
         ...payload.new,
-        notes: payload.new.notes || "",
         subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
         expanded: false
       };
@@ -119,7 +113,6 @@ const TaskManager = () => {
         if (task.id === payload.new.id) {
           return {
             ...payload.new,
-            notes: payload.new.notes || "",
             subtasks: Array.isArray(payload.new.subtasks) ? payload.new.subtasks : [],
             expanded: task.expanded
           };
@@ -148,7 +141,6 @@ const TaskManager = () => {
         
         return (data || []).map(task => ({
           ...task,
-          notes: task.notes || "",
           subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
           expanded: expandedMap.get(task.id) ?? false
         }));
@@ -172,7 +164,6 @@ const TaskManager = () => {
       id: `${Date.now()}-${Math.random()}`,
       text: newTaskText,
       completed: false,
-      notes: "",
       subtasks: [],
       expanded: false,
       created_by: currentUser,
@@ -382,28 +373,6 @@ const TaskManager = () => {
     );
   };
 
-  const updateNotes = async (taskId: string, notes: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    setTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, notes } : t
-    ));
-
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ notes })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error("Error al guardar notas:", error);
-      }
-    } catch (err) {
-      console.error("Error:", err);
-    }
-  };
-
   const getSubtaskProgress = (task: Task) => {
     if (task.subtasks.length === 0) return null;
     const completed = task.subtasks.filter(st => st.completed).length;
@@ -423,139 +392,106 @@ const TaskManager = () => {
         key={task.id}
         className={`border rounded-lg p-3 transition-all ${
           task.completed 
-            ? "dark:bg-green-900/20 dark:border-green-700/50 bg-green-50 border-green-200"
-            : "dark:bg-gray-800/50 dark:border-gray-700 dark:hover:border-gray-600 bg-white border-gray-200 hover:border-gray-300"
+            ? "dark:bg-green-900/20 dark:border-green-600 bg-green-50 border-green-200"
+            : "dark:bg-gray-800 dark:border-gray-600 bg-gray-100 border-gray-300"
         }`}
       >
         <div className="flex items-start gap-3">
-          <Checkbox 
+          <Checkbox
             checked={task.completed}
             onCheckedChange={() => toggleTaskComplete(task.id)}
-            className="h-5 w-5 mt-0.5"
+            className="mt-1"
           />
-          
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex-1">
-                <p className={`font-medium ${
-                  task.completed 
-                    ? "dark:text-green-400 dark:line-through text-green-600 line-through"
-                    : "dark:text-white text-gray-900"
-                }`}>
-                  {task.text}
-                </p>
-                <p className="text-xs dark:text-gray-500 text-gray-600 mt-0.5">
-                  Por: {task.created_by}
-                </p>
-              </div>
-              
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {task.notes && !task.expanded && (
-                  <StickyNote className="h-3 w-3 dark:text-yellow-400 text-yellow-600" />
-                )}
-                {progress && (
-                  <span className="text-xs dark:text-gray-400 text-gray-600 mr-1">
+            <div className="flex items-center gap-2">
+              <p className={`dark:text-white text-gray-900 ${task.completed ? "font-semibold dark:line-through" : ""}`}>
+                {task.text}
+              </p>
+              {task.completed && (
+                <CheckCircle2 className="h-4 w-4 dark:text-green-400 text-green-600 flex-shrink-0" />
+              )}
+            </div>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-xs dark:text-gray-400 text-gray-600">
+                Por: {task.created_by} • {new Date(task.created_at).toLocaleDateString()}
+              </p>
+              {!task.expanded && progress && (
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-1.5 dark:bg-gray-700 bg-gray-300 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#F7DC6F] transition-all duration-300"
+                      style={{ width: `${progress.percentage}%` }}
+                    />
+                  </div>
+                  <span className="text-xs dark:text-gray-400 text-gray-600">
                     {progress.completed}/{progress.total}
                   </span>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleExpanded(task.id)}
-                  className="h-7 w-7 p-0 dark:text-gray-400 dark:hover:text-white text-gray-600 hover:text-gray-900"
-                >
-                  {task.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteTask(task.id)}
-                  className="h-7 w-7 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-            
-            {progress && (
-              <div className="mt-2">
-                <div className="h-1.5 dark:bg-gray-700 bg-gray-300 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-blue-500 transition-all duration-300"
-                    style={{ width: `${progress.percentage}%` }}
-                  />
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+          <div className="flex gap-1 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleExpanded(task.id)}
+              className="h-8 w-8 p-0 dark:text-gray-400 dark:hover:text-white text-gray-600 hover:text-gray-900"
+            >
+              {task.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => deleteTask(task.id)}
+              className="h-8 w-8 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
         {task.expanded && (
-          <div className="mt-3 pl-8 space-y-3">
-            {/* NOTAS */}
-            <div className="space-y-1">
-              <label className="text-xs dark:text-gray-400 text-gray-600 flex items-center gap-1">
-                <StickyNote className="h-3 w-3" />
-                Notas
-              </label>
-              <Textarea
-                placeholder="Agregar notas..."
-                defaultValue={task.notes}
-                onChange={(e) => updateNotes(task.id, e.target.value)}
-                className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-gray-50 border-gray-300 text-gray-900 text-sm min-h-[60px] resize-none"
-              />
-            </div>
-
-            {/* SUBTAREAS */}
-            <div className="space-y-2">
-              <label className="text-xs dark:text-gray-400 text-gray-600">Subtareas</label>
-              {task.subtasks.map((subtask) => (
-                <div 
-                  key={subtask.id}
-                  className="flex items-center gap-2 py-1"
-                >
-                  <Checkbox
-                    checked={subtask.completed}
-                    onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
-                    className="h-4 w-4"
-                  />
-                  <p className={`text-sm flex-1 ${
-                    subtask.completed 
-                      ? "dark:text-green-400 dark:line-through text-green-600 line-through"
-                      : "dark:text-gray-300 text-gray-700"
-                  }`}>
-                    {subtask.text}
-                  </p>
-                  {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteSubtask(task.id, subtask.id)}
-                    className="h-6 w-6 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
-
-              {/* Agregar subtarea */}
-              <div className="flex gap-2 mt-2 pt-2 dark:border-gray-700 border-gray-300 border-t">
-                <Input
-                  placeholder="Agregar subtarea..."
-                  value={newSubtaskText[task.id] || ""}
-                  onChange={(e) => setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })}
-                  onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
-                  className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
+          <div className="ml-8 mt-3 space-y-2">
+            {task.subtasks.map(subtask => (
+              <div key={subtask.id} className="flex items-center gap-2">
+                <Checkbox
+                  checked={subtask.completed}
+                  onCheckedChange={() => toggleSubtaskComplete(task.id, subtask.id)}
+                  className="h-4 w-4"
                 />
+                <p className={`text-sm flex-1 ${subtask.completed ? "dark:text-green-400 dark:line-through text-green-600 line-through" : "dark:text-gray-300 text-gray-700"}`}>
+                  {subtask.text}
+                </p>
+                {subtask.completed && <CheckCircle2 className="h-3 w-3 dark:text-green-400 text-green-600" />}
                 <Button
-                  onClick={() => addSubtask(task.id)}
+                  variant="ghost"
                   size="sm"
-                  className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
+                  onClick={() => deleteSubtask(task.id, subtask.id)}
+                  className="h-6 w-6 p-0 dark:text-red-400 dark:hover:text-red-300 text-red-600 hover:text-red-700"
                 >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Agregar
+                  <Trash2 className="h-3 w-3" />
                 </Button>
               </div>
+            ))}
+
+            <div className="flex gap-2 mt-2 pt-2 dark:border-gray-700 border-gray-300 border-t">
+              <Input
+                placeholder="Agregar subtarea..."
+                value={newSubtaskText[task.id] || ""}
+                onChange={(e) =>
+                  setNewSubtaskText({ ...newSubtaskText, [task.id]: e.target.value })
+                }
+                onKeyPress={(e) => e.key === "Enter" && addSubtask(task.id)}
+                className="dark:bg-gray-900 dark:border-gray-600 dark:text-white bg-white border-gray-300 text-gray-900 text-sm h-8"
+              />
+              <Button
+                onClick={() => addSubtask(task.id)}
+                size="sm"
+                className="h-8 text-xs flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Agregar
+              </Button>
             </div>
           </div>
         )}
@@ -566,8 +502,8 @@ const TaskManager = () => {
   return (
     <Card className="mb-6 dark:bg-[#161A15] dark:border-[#161A15] bg-white border-gray-200">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className="dark:text-white text-gray-900">Operaciones del Equipo</CardTitle>
-        {!showAddTask && (
+        <CardTitle className="dark:text-white text-gray-900">Tareas Activas</CardTitle>
+        {!showAddTask ? (
           <Button 
             onClick={() => setShowAddTask(true)}
             size="sm"
@@ -575,16 +511,16 @@ const TaskManager = () => {
             className="dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
           >
             <Plus className="h-4 w-4 mr-1" />
-            Nueva operación
+            Nueva tarea
           </Button>
-        )}
+        ) : null}
       </CardHeader>
       
       <CardContent className="space-y-4">
         {showAddTask && (
           <div className="flex gap-2 pb-4 dark:border-gray-700 border-gray-300 border-b">
             <Input
-              placeholder="Escribe la nueva operación..."
+              placeholder="Escribe la nueva tarea..."
               value={newTaskText}
               onChange={(e) => setNewTaskText(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addTask()}
@@ -617,15 +553,13 @@ const TaskManager = () => {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Pendientes</h3>
-              <span className="text-xs dark:bg-yellow-500/20 dark:text-yellow-300 bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                {pendingTasks.length}
-              </span>
+              <span className="text-xs dark:bg-yellow-500/20 dark:text-yellow-300 bg-yellow-100 text-yellow-800 px-2 py-1 rounded">{pendingTasks.length}</span>
             </div>
             <div className="space-y-3">
               {pendingTasks.length === 0 ? (
                 <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>¡No hay operaciones pendientes!</p>
-                  <p className="text-xs mt-1">Agrega una nueva operación</p>
+                  <p>¡No hay tareas pendientes!</p>
+                  <p className="text-xs mt-1">Agrega una nueva tarea</p>
                 </div>
               ) : (
                 pendingTasks.map(renderTask)
@@ -636,15 +570,13 @@ const TaskManager = () => {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Completadas</h3>
-              <span className="text-xs dark:bg-green-500/20 dark:text-green-300 bg-green-100 text-green-800 px-2 py-1 rounded">
-                {completedTasks.length}
-              </span>
+              <span className="text-xs dark:bg-green-500/20 dark:text-green-300 bg-green-100 text-green-800 px-2 py-1 rounded">{completedTasks.length}</span>
             </div>
             <div className="space-y-3">
               {completedTasks.length === 0 ? (
                 <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-gray-700 border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>Aún no hay operaciones completadas</p>
-                  <p className="text-xs mt-1">Completa algunas operaciones</p>
+                  <p>Aún no hay tareas completadas</p>
+                  <p className="text-xs mt-1">Completa algunas tareas</p>
                 </div>
               ) : (
                 completedTasks.map(renderTask)
@@ -655,7 +587,7 @@ const TaskManager = () => {
 
         <div className="pt-4 dark:border-gray-700 border-gray-300 border-t">
           <p className="text-xs dark:text-gray-500 text-gray-600">
-            💡 Click en la flecha (→) para expandir y ver/agregar subtareas y notas. 
+            💡 Click en la flecha (→) para expandir y ver/agregar subtareas. 
             <span className="ml-2">
               {usePolling ? (
                 <span className="dark:text-yellow-400 text-yellow-600">🔄 Modo Polling (recarga cada 3s)</span>
