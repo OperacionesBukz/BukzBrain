@@ -7,8 +7,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Las variables de entorno de Supabase no están configuradas')
 }
 
-// Cliente simplificado - dejar que Supabase maneje los defaults
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Cliente con Realtime forzando versión 1.0.0
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      vsn: '1.0.0'
+    }
+  }
+})
 
-console.log('✅ Supabase inicializado')
-console.log('📡 URL:', supabaseUrl)
+console.log('✅ Supabase inicializado con Realtime v1.0.0')
