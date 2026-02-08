@@ -1,24 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim()
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim().replace(/[\r\n\s]/g, '')
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Las variables de entorno de Supabase no están configuradas')
 }
 
-// Forzar WebSocket a usar vsn 1.0.0
-const OriginalWebSocket = window.WebSocket;
-window.WebSocket = function(url: string | URL, protocols?: string | string[]) {
-  let modifiedUrl = url.toString();
-  if (modifiedUrl.includes('supabase') && modifiedUrl.includes('realtime')) {
-    modifiedUrl = modifiedUrl.replace('vsn=2.0.0', 'vsn=1.0.0');
-    console.log('🔧 WebSocket URL modificada a vsn=1.0.0');
-  }
-  return new OriginalWebSocket(modifiedUrl, protocols);
-} as any;
+console.log('🔑 Key length:', supabaseAnonKey.length)
+console.log('🔑 Key ends with:', supabaseAnonKey.slice(-10))
 
-// Cliente normal
+// Cliente normal con key limpia
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-console.log('✅ Supabase inicializado con WebSocket interceptor')
+console.log('✅ Supabase inicializado')
