@@ -40,7 +40,6 @@ interface Task {
   order?: number;
 }
 
-// Componente de tarea arrastrable
 function SortableTaskCard({ task, children }: { task: Task; children: React.ReactNode }) {
   const {
     attributes,
@@ -64,7 +63,7 @@ function SortableTaskCard({ task, children }: { task: Task; children: React.Reac
   );
 }
 
-const TaskManager = () => {
+const PersonalTaskBoard = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [currentUser, setCurrentUser] = useState("");
@@ -76,12 +75,6 @@ const TaskManager = () => {
   const [editingSubtaskText, setEditingSubtaskText] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   
-  // NUEVO: Estados para proteger campos activos y debouncing
-  const [focusedFields, setFocusedFields] = useState<Set<string>>(new Set());
-  const [localNotes, setLocalNotes] = useState<{ [key: string]: string }>({});
-  const saveTimersRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
-  
-  const lastLoadRef = useRef<number>(0);
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -95,64 +88,41 @@ const TaskManager = () => {
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
-    
-    // Solo cargar tareas al montar el componente
-    const loadInitialTasks = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('personal_tasks')
-          .select('*')
-          .eq('created_by', username)
-          .order('order', { ascending: true })
-          .order('created_at', { ascending: false });
+    loadTasks(username);
 
-        if (!error && data) {
-          const tasksWithDefaults = data.map(task => ({
-            ...task,
-            notes: task.notes || "",
-            subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
-            order: task.order || 0
-          }));
-          setTasks(tasksWithDefaults);
-          lastLoadRef.current = Date.now();
-        }
-      } catch (err) {
-        console.error("Error inicial:", err);
-      }
-    };
-    
-    loadInitialTasks();
-
+    // Polling cada 5 segundos
     const interval = setInterval(() => {
-      loadTasks();
-    }, 2000);
+      loadTasks(username);
+    }, 5000);
 
-    return () => {
-      clearInterval(interval);
-      // Limpiar todos los timers pendientes
-      Object.values(saveTimersRef.current).forEach(timer => clearTimeout(timer));
-    };
-  }, []); // SIN DEPENDENCIAS - solo ejecutar una vez
+    return () => clearInterval(interval);
+  }, []);
 
-  const loadTasks = async () => {
-    // PROTECCIÓN: No recargar si hay campos activos
-    if (focusedFields.size > 0) {
-      console.log('⏸️ Reload pausado - usuario escribiendo en', focusedFields.size, 'campos');
-      return;
-    }
+  const loadTasks = async (username?: string) => {
+    const user = username || currentUser;
+    if (!user) return;
 
     try {
+      console.log("📥 Cargando tareas para:", user);
+      
       const { data, error } = await supabase
         .from('personal_tasks')
         .select('*')
-        .eq('created_by', currentUser)
+        .eq('created_by', user)
         .order('order', { ascending: true })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false});
 
       if (error) {
-        console.error("Error al cargar tareas:", error);
+        console.error("❌ Error al cargar tareas:", error);
+        toast({
+          title: "Error al cargar",
+          description: error.message,
+          variant: "destructive"
+        });
         return;
       }
+
+      console.log("✅ Tareas cargadas:", data?.length || 0);
 
       const tasksWithDefaults = (data || []).map(task => ({
         ...task,
@@ -162,9 +132,8 @@ const TaskManager = () => {
       }));
 
       setTasks(tasksWithDefaults);
-      lastLoadRef.current = Date.now();
     } catch (err) {
-      console.error("Error inesperado:", err);
+      console.error("❌ Error inesperado:", err);
     }
   };
 
@@ -183,22 +152,21 @@ const TaskManager = () => {
 
     if (!activeTask || !overTask) return;
 
-    // Si se mueve entre columnas (pendiente <-> completada)
     if (activeTask.completed !== overTask.completed) {
       try {
         const { error } = await supabase
           .from('personal_tasks')
           .update({ completed: overTask.completed })
-          .eq('id', activeTask.id).eq('created_by', currentUser);
+          .eq('id', activeTask.id)
+          .eq('created_by', currentUser);
 
         if (!error) {
-          await loadTasks();
+          loadTasks();
         }
       } catch (err) {
         console.error("Error:", err);
       }
     } else {
-      // Reordenar dentro de la misma columna
       const taskList = tasks.filter(t => t.completed === activeTask.completed);
       const oldIndex = taskList.findIndex(t => t.id === active.id);
       const newIndex = taskList.findIndex(t => t.id === over.id);
@@ -208,7 +176,6 @@ const TaskManager = () => {
         const [removed] = reordered.splice(oldIndex, 1);
         reordered.splice(newIndex, 0, removed);
 
-        // Actualizar órdenes
         const updates = reordered.map((task, index) => ({
           id: task.id,
           order: index
@@ -219,9 +186,10 @@ const TaskManager = () => {
             await supabase
               .from('personal_tasks')
               .update({ order: update.order })
-              .eq('id', update.id);
+              .eq('id', update.id)
+              .eq('created_by', currentUser);
           }
-          await loadTasks();
+          loadTasks();
         } catch (err) {
           console.error("Error:", err);
         }
@@ -253,15 +221,7 @@ const TaskManager = () => {
       order: 0
     };
 
-    // OPTIMISTIC UI: Mostrar tarea inmediatamente
-    setTasks(prev => [newTask, ...prev]);
-    const textBackup = newTaskText;
-    setNewTaskText("");
-    
-    toast({
-      title: "✅ Tarea creada",
-      description: "Guardando...",
-    });
+    console.log("💾 Guardando tarea:", newTask);
 
     try {
       const { data, error } = await supabase
@@ -270,27 +230,27 @@ const TaskManager = () => {
         .select();
       
       if (error) {
-        console.error("❌ Error al guardar tarea:", error);
-        // REVERTIR cambio optimista
-        setTasks(prev => prev.filter(t => t.id !== newTask.id));
-        setNewTaskText(textBackup);
+        console.error("❌ Error al guardar:", error);
         toast({
           title: "Error al guardar",
-          description: error.message || "Revisa tu conexión",
+          description: error.message,
           variant: "destructive"
         });
       } else {
-        console.log("✅ Tarea guardada exitosamente:", data);
-        // NO llamar loadTasks() - dejar que el polling lo maneje
+        console.log("✅ Tarea guardada:", data);
+        setNewTaskText("");
+        toast({
+          title: "✅ Tarea creada",
+          description: "La tarea se ha agregado correctamente",
+        });
+        // Recargar tareas
+        await loadTasks();
       }
     } catch (err) {
       console.error("❌ Error inesperado:", err);
-      // REVERTIR cambio optimista
-      setTasks(prev => prev.filter(t => t.id !== newTask.id));
-      setNewTaskText(textBackup);
       toast({
         title: "Error",
-        description: "No se pudo crear la tarea",
+        description: "Ocurrió un error al crear la tarea",
         variant: "destructive"
       });
     } finally {
@@ -312,7 +272,8 @@ const TaskManager = () => {
       const { error } = await supabase
         .from('personal_tasks')
         .update({ text: newText })
-        .eq('id', taskId).eq('created_by', currentUser);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
@@ -336,31 +297,22 @@ const TaskManager = () => {
 
   const updateTaskNotes = async (taskId: string, notes: string) => {
     try {
+      console.log("💾 Guardando notas para tarea:", taskId);
+      
       const { error } = await supabase
         .from('personal_tasks')
         .update({ notes })
-        .eq('id', taskId).eq('created_by', currentUser);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
 
       if (!error) {
         console.log("✅ Notas guardadas");
+      } else {
+        console.error("❌ Error al guardar notas:", error);
       }
     } catch (err) {
       console.error("Error:", err);
     }
-  };
-
-  // NUEVO: Función con debounce para guardar notas
-  const debouncedSaveNotes = (taskId: string, notes: string) => {
-    // Cancelar timer anterior si existe
-    if (saveTimersRef.current[`notes-${taskId}`]) {
-      clearTimeout(saveTimersRef.current[`notes-${taskId}`]);
-    }
-
-    // Crear nuevo timer - espera 800ms después de dejar de escribir
-    saveTimersRef.current[`notes-${taskId}`] = setTimeout(() => {
-      updateTaskNotes(taskId, notes);
-      delete saveTimersRef.current[`notes-${taskId}`];
-    }, 800);
   };
 
   const addSubtask = async (taskId: string, subtaskText: string) => {
@@ -388,7 +340,8 @@ const TaskManager = () => {
       const { error } = await supabase
         .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId).eq('created_by', currentUser);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
@@ -426,7 +379,8 @@ const TaskManager = () => {
       const { error } = await supabase
         .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId).eq('created_by', currentUser);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
@@ -461,7 +415,8 @@ const TaskManager = () => {
           subtasks: updatedSubtasks,
           completed: allSubtasksComplete 
         })
-        .eq('id', taskId).eq('created_by', currentUser);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
@@ -483,7 +438,8 @@ const TaskManager = () => {
       const { error } = await supabase
         .from('personal_tasks')
         .update({ subtasks: updatedSubtasks })
-        .eq('id', taskId).eq('created_by', currentUser);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
@@ -513,7 +469,8 @@ const TaskManager = () => {
           completed: newCompleted,
           subtasks: updatedSubtasks 
         })
-        .eq('id', taskId).eq('created_by', currentUser);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
 
       if (error) {
         console.error("Error:", error);
@@ -530,7 +487,8 @@ const TaskManager = () => {
       const { error } = await supabase
         .from('personal_tasks')
         .delete()
-        .eq('id', taskId).eq('created_by', currentUser);
+        .eq('id', taskId)
+        .eq('created_by', currentUser);
       
       if (error) {
         console.error("Error:", error);
@@ -577,7 +535,6 @@ const TaskManager = () => {
     const progress = getSubtaskProgress(task);
     const isEditingTask = editingTaskId === task.id;
     
-    const notesRef = useRef<HTMLTextAreaElement>(null);
     const subtaskInputRef = useRef<HTMLInputElement>(null);
 
     return (
@@ -588,9 +545,7 @@ const TaskManager = () => {
             : "bg-[#0f0f0f] border-[#2a2a2a] hover:border-[#3a3a3a]"
         }`}
       >
-        {/* Header de la tarea */}
         <div className="flex items-center gap-3">
-          {/* CHECKBOX A LA IZQUIERDA */}
           <Checkbox
             checked={task.completed}
             onCheckedChange={() => toggleTaskComplete(task.id)}
@@ -598,7 +553,6 @@ const TaskManager = () => {
           />
           
           <div className="flex-1 space-y-2">
-            {/* Nombre de la tarea (editable) */}
             {isEditingTask ? (
               <div className="flex gap-2">
                 <Input
@@ -607,7 +561,7 @@ const TaskManager = () => {
                   onKeyPress={(e) => {
                     if (e.key === "Enter") updateTaskText(task.id, editingText);
                   }}
-                  className="bg-white text-sm h-8"
+                  className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 text-sm h-8"
                   autoFocus
                 />
                 <Button
@@ -645,7 +599,6 @@ const TaskManager = () => {
               </div>
             )}
 
-            {/* Progreso de subtareas */}
             {progress && (
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <div className="flex-1 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
@@ -658,23 +611,20 @@ const TaskManager = () => {
               </div>
             )}
 
-            {/* Indicadores */}
             <div className="flex items-center gap-2 text-xs">
-              
               {task.subtasks.length > 0 && (
                 <span className="text-gray-400">
-                  • {task.subtasks.length} subtarea{task.subtasks.length !== 1 ? 's' : ''}
+                  {task.subtasks.length} subtarea{task.subtasks.length !== 1 ? 's' : ''}
                 </span>
               )}
               {task.notes && (
                 <span className="flex items-center gap-1 text-yellow-400">
-                  • <StickyNote className="h-3 w-3" /> Notas
+                  {task.subtasks.length > 0 && '• '}<StickyNote className="h-3 w-3" /> Notas
                 </span>
               )}
             </div>
           </div>
 
-          {/* Botones de acción A LA DERECHA */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <Button
               variant="ghost"
@@ -695,53 +645,18 @@ const TaskManager = () => {
           </div>
         </div>
 
-        {/* Detalles expandidos */}
         {isExpanded && (
           <div className="ml-0 mt-3 space-y-3 pl-3 border-l-2 border-[#2a2a2a]">
-            {/* Notas */}
+            {/* Notas - SIMPLIFICADO */}
             <div>
               <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1">
                 <StickyNote className="h-3 w-3" />
-                Notas (se guardan automáticamente al escribir)
+                Notas (se guardan al salir del campo)
               </label>
               <textarea
-                value={localNotes[task.id] ?? task.notes}
-                onFocus={() => {
-                  // PROTECCIÓN: Marcar campo como activo
-                  setFocusedFields(prev => new Set(prev).add(`notes-${task.id}`));
-                  // Inicializar nota local si no existe
-                  if (localNotes[task.id] === undefined) {
-                    setLocalNotes(prev => ({ ...prev, [task.id]: task.notes }));
-                  }
-                }}
-                onChange={(e) => {
-                  // Actualizar estado local inmediatamente
-                  const newValue = e.target.value;
-                  setLocalNotes(prev => ({ ...prev, [task.id]: newValue }));
-                  
-                  // DEBOUNCE: Cancelar guardado anterior
-                  if (saveTimersRef.current[`notes-${task.id}`]) {
-                    clearTimeout(saveTimersRef.current[`notes-${task.id}`]);
-                  }
-                  
-                  // DEBOUNCE: Guardar después de 800ms sin escribir
-                  saveTimersRef.current[`notes-${task.id}`] = setTimeout(() => {
-                    debouncedSaveNotes(task.id, newValue);
-                    delete saveTimersRef.current[`notes-${task.id}`];
-                  }, 800);
-                }}
+                key={task.id}
+                defaultValue={task.notes}
                 onBlur={(e) => {
-                  // PROTECCIÓN: Desmarcar campo
-                  setFocusedFields(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(`notes-${task.id}`);
-                    return newSet;
-                  });
-                  
-                  // Guardar inmediatamente al salir
-                  if (saveTimersRef.current[`notes-${task.id}`]) {
-                    clearTimeout(saveTimersRef.current[`notes-${task.id}`]);
-                  }
                   updateTaskNotes(task.id, e.target.value);
                 }}
                 placeholder="Agrega notas o recordatorios..."
@@ -775,7 +690,7 @@ const TaskManager = () => {
                                 updateSubtaskText(task.id, subtask.id, editingSubtaskText);
                               }
                             }}
-                            className="bg-white text-xs h-7"
+                            className="bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 text-xs h-7"
                             autoFocus
                           />
                           <Button
@@ -839,7 +754,7 @@ const TaskManager = () => {
                       subtaskInputRef.current.value = "";
                     }
                   }}
-                  className="flex-1 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm h-8 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#F7DC6F]"
+                  className="flex-1 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm h-8 px-3 rounded-md border border-gray-300 dark:border-[#2a2a2a] focus:outline-none focus:ring-2 focus:ring-[#F7DC6F]"
                 />
                 <Button
                   onClick={() => {
@@ -872,7 +787,6 @@ const TaskManager = () => {
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">
-        {/* Header con input */}
         <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
           <CardHeader className="pb-4">
             <CardTitle className="text-white">Mis Tareas Personales</CardTitle>
@@ -902,9 +816,7 @@ const TaskManager = () => {
           </CardContent>
         </Card>
 
-        {/* Tablero Horizontal */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Columna: En Proceso */}
           <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -936,7 +848,6 @@ const TaskManager = () => {
             </CardContent>
           </Card>
 
-          {/* Columna: Finalizadas */}
           <Card className="bg-[#0f0f0f] border-[#2a2a2a]">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -953,7 +864,7 @@ const TaskManager = () => {
                 <div className="space-y-2 max-h-[700px] overflow-y-auto">
                   {completedTasks.length === 0 ? (
                     <div className="text-center py-16 text-gray-500 text-sm border border-dashed border-[#2a2a2a] rounded-lg h-[200px] flex flex-col items-center justify-center">
-                      <p>Aún no hay tareas completadas</p>
+                      <p>Aún no has completado tareas</p>
                     </div>
                   ) : (
                     completedTasks.map(task => (
@@ -980,4 +891,4 @@ const TaskManager = () => {
   );
 };
 
-export default TaskManager;
+export default PersonalTaskBoard;
