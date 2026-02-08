@@ -7,7 +7,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Las variables de entorno de Supabase no están configuradas')
 }
 
-// ✅ Configuración con Realtime explícito
+/**
+ * Cliente de Supabase configurado con Realtime optimizado
+ */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {
     params: {
@@ -20,6 +22,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// 🔍 Logging para verificar que Realtime está activo (opcional, puedes comentar después)
+// Logging de inicialización
 console.log('✅ Supabase inicializado')
 console.log('📡 URL:', supabaseUrl)
