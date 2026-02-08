@@ -24,7 +24,7 @@ interface PersonalTask {
   notes: string;
   subtasks: Subtask[];
   expanded: boolean;
-  user_id: string;
+  created_by: string;
   created_at: string;
 }
 
@@ -247,21 +247,31 @@ const PersonalTasksManager = () => {
   }, []);
 
   // ============================================
-  // CARGAR TAREAS PERSONALES (filtradas por usuario)
+  // CARGAR TAREAS PERSONALES
   // ============================================
   const loadTasks = async (username: string) => {
     try {
+      console.log('📥 Cargando tareas para usuario:', username);
+      
+      // OPCIÓN 1: Si tu tabla se llama "personal_tasks" y tiene el campo "created_by"
       const { data, error } = await supabase
         .from('personal_tasks')
         .select('*')
-        .eq('user_id', username)
+        .eq('created_by', username)
         .order('created_at', { ascending: false });
+
+      // OPCIÓN 2: Si tu tabla se llama "tasks" y tiene el campo "created_by" (descomentar si es necesario)
+      // const { data, error } = await supabase
+      //   .from('tasks')
+      //   .select('*')
+      //   .eq('created_by', username)
+      //   .order('created_at', { ascending: false });
 
       if (error) {
         console.error("Error al cargar tareas personales:", error);
         toast({
           title: "Error",
-          description: "No se pudieron cargar las tareas personales",
+          description: `Error: ${error.message}`,
           variant: "destructive"
         });
         return;
@@ -281,6 +291,11 @@ const PersonalTasksManager = () => {
       console.log('✅ Tareas personales cargadas:', data?.length || 0);
     } catch (err) {
       console.error("Error inesperado:", err);
+      toast({
+        title: "Error",
+        description: "Error inesperado al cargar tareas",
+        variant: "destructive"
+      });
     }
   };
 
@@ -304,7 +319,7 @@ const PersonalTasksManager = () => {
       notes: "",
       subtasks: [],
       expanded: false,
-      user_id: currentUser,
+      created_by: currentUser,
       created_at: new Date().toISOString()
     };
 
@@ -319,7 +334,7 @@ const PersonalTasksManager = () => {
         completed: newTask.completed,
         notes: newTask.notes,
         subtasks: newTask.subtasks,
-        user_id: newTask.user_id,
+        created_by: newTask.created_by,
         created_at: newTask.created_at
       }]);
       
@@ -328,7 +343,7 @@ const PersonalTasksManager = () => {
         setTasks(prev => prev.filter(t => t.id !== newTask.id));
         toast({
           title: "Error",
-          description: "No se pudo crear la tarea",
+          description: `No se pudo crear la tarea: ${error.message}`,
           variant: "destructive"
         });
       } else {
