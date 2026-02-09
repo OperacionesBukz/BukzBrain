@@ -7,6 +7,25 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, StickyNote, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Subtask {
   id: string;
@@ -35,14 +54,10 @@ interface PersonalTaskItemProps {
   onDeleteSubtask: (taskId: string, subtaskId: string) => void;
   onAddSubtask: (taskId: string, text: string) => void;
   onUpdateNotes: (taskId: string, notes: string) => void;
-  onDragStart: (e: React.DragEvent, taskId: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, taskId: string) => void;
-  isDragging: boolean;
-  isDragOver: boolean;
+  isOverlay?: boolean;
 }
 
-const PersonalTaskItem = memo(({
+const TaskItemContent = memo(({
   task,
   onToggleComplete,
   onToggleExpanded,
@@ -51,11 +66,7 @@ const PersonalTaskItem = memo(({
   onDeleteSubtask,
   onAddSubtask,
   onUpdateNotes,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  isDragging,
-  isDragOver,
+  isOverlay,
 }: PersonalTaskItemProps) => {
   const [newSubtaskText, setNewSubtaskText] = useState("");
   const [localNotes, setLocalNotes] = useState(task.notes || "");
@@ -97,29 +108,7 @@ const PersonalTaskItem = memo(({
   } : null;
 
   return (
-    <div
-      draggable
-      onDragStart={(e) => onDragStart(e, task.id)}
-      onDragOver={onDragOver}
-      onDrop={(e) => onDrop(e, task.id)}
-      className={`border rounded-lg p-3 transition-all duration-200 cursor-move select-none
-        ${isDragging 
-          ? "opacity-50 dark:bg-[#1a1a1a] scale-95" 
-          : isDragOver 
-          ? "dark:bg-[#3a3a3a] dark:border-blue-500 bg-blue-50 border-blue-300 shadow-md scale-102"
-          : task.completed
-          ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200 hover:dark:bg-[#353535] hover:dark:shadow-lg hover:shadow-sm"
-          : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300 hover:dark:bg-[#353535] hover:dark:shadow-lg hover:shadow-sm"
-        }`}
-      style={{
-        transform: isDragOver ? 'scale(1.02)' : isDragging ? 'scale(0.95)' : 'scale(1)',
-        boxShadow: isDragOver 
-          ? '0 10px 25px rgba(59, 130, 246, 0.2)' 
-          : isDragging 
-          ? 'none'
-          : 'none'
-      }}
-    >
+    <>
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center">
           <Checkbox
@@ -175,8 +164,8 @@ const PersonalTaskItem = memo(({
         </div>
       </div>
 
-      {task.expanded && (
-        <div className="mt-3 pl-8 space-y-3">
+      {task.expanded && !isOverlay && (
+        <div className="mt-3 pl-10 space-y-3">
           <div className="space-y-1">
             <label className="text-xs dark:text-gray-400 text-gray-600 flex items-center gap-1">
               <StickyNote className="h-3 w-3" />
@@ -237,20 +226,89 @@ const PersonalTaskItem = memo(({
           </div>
         </div>
       )}
+    </>
+  );
+});
+
+TaskItemContent.displayName = 'TaskItemContent';
+
+const SortableTaskItem = memo((props: PersonalTaskItemProps) => {
+  const { task } = props;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 0 : 'auto' as const,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`border rounded-lg p-3 transition-colors duration-200 select-none touch-none cursor-grab active:cursor-grabbing
+        ${isDragging
+          ? "dark:bg-[#1a1a1a] dark:border-[#3a3a3a] bg-gray-50 border-gray-200"
+          : task.completed
+          ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200 hover:dark:bg-[#353535] hover:dark:shadow-lg hover:shadow-sm"
+          : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300 hover:dark:bg-[#353535] hover:dark:shadow-lg hover:shadow-sm"
+        }`}
+      {...attributes}
+      {...listeners}
+    >
+      <TaskItemContent {...props} />
     </div>
   );
 });
 
-PersonalTaskItem.displayName = 'PersonalTaskItem';
+SortableTaskItem.displayName = 'SortableTaskItem';
+
+const DragOverlayItem = memo((props: PersonalTaskItemProps) => {
+  return (
+    <div
+      className={`border rounded-lg p-3 shadow-2xl select-none ring-2 ring-blue-500/50
+        ${props.task.completed
+          ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200"
+          : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300"
+        }`}
+      style={{
+        transform: 'scale(1.03)',
+        cursor: 'grabbing',
+      }}
+    >
+      <TaskItemContent {...props} isOverlay />
+    </div>
+  );
+});
+
+DragOverlayItem.displayName = 'DragOverlayItem';
 
 const PersonalTasksManager = () => {
   const [tasks, setTasks] = useState<PersonalTask[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [showAddTask, setShowAddTask] = useState(false);
   const [currentUser, setCurrentUser] = useState("");
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
@@ -543,88 +601,63 @@ const PersonalTasksManager = () => {
   const pendingTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
 
-  const handleDragStart = useCallback((e: React.DragEvent, taskId: string) => {
-    setDraggedTaskId(taskId);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setDragImage(new Image(), 0, 0); // Imagen de drag personalizada vacía
+  const activeTask = activeTaskId ? tasks.find(t => t.id === activeTaskId) : null;
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveTaskId(event.active.id as string);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, taskId?: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (taskId) {
-      setDragOverTaskId(taskId);
-    }
-  }, []);
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTaskId(null);
 
-  const handleDragLeave = useCallback(() => {
-    setDragOverTaskId(null);
-  }, []);
+    if (!over || active.id === over.id) return;
 
-  const handleDrop = useCallback(async (e: React.DragEvent, targetTaskId: string) => {
-    e.preventDefault();
-    
-    if (!draggedTaskId || draggedTaskId === targetTaskId) {
-      setDraggedTaskId(null);
-      setDragOverTaskId(null);
-      return;
-    }
+    const draggedTask = tasks.find(t => t.id === active.id);
+    const targetTask = tasks.find(t => t.id === over.id);
 
-    // Reordenar tareas
-    const draggedTask = tasks.find(t => t.id === draggedTaskId);
-    const targetTask = tasks.find(t => t.id === targetTaskId);
+    if (!draggedTask || !targetTask) return;
 
-    if (!draggedTask || !targetTask) {
-      setDraggedTaskId(null);
-      setDragOverTaskId(null);
-      return;
-    }
+    // Solo reordenar dentro del mismo estado (pendiente/completada)
+    if (draggedTask.completed !== targetTask.completed) return;
 
-    // Si ambas tareas están en el mismo estado (pendiente/completada), reordenar
-    const draggedIsPending = !draggedTask.completed;
-    const targetIsPending = !targetTask.completed;
+    const relevantTasks = !draggedTask.completed ? pendingTasks : completedTasks;
+    const oldIndex = relevantTasks.findIndex(t => t.id === active.id);
+    const newIndex = relevantTasks.findIndex(t => t.id === over.id);
 
-    if (draggedIsPending === targetIsPending) {
-      const relevantTasks = draggedIsPending ? pendingTasks : completedTasks;
-      const draggedIndex = relevantTasks.findIndex(t => t.id === draggedTaskId);
-      const targetIndex = relevantTasks.findIndex(t => t.id === targetTaskId);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-      if (draggedIndex !== -1 && targetIndex !== -1) {
-        const newRelevantTasks = [...relevantTasks];
-        const [movedTask] = newRelevantTasks.splice(draggedIndex, 1);
-        newRelevantTasks.splice(targetIndex, 0, movedTask);
+    const reorderedTasks = arrayMove(relevantTasks, oldIndex, newIndex);
 
-        // Actualizar toda la lista de tareas manteniendo el orden
-        const newTasks = draggedIsPending
-          ? [...newRelevantTasks, ...completedTasks]
-          : [...pendingTasks, ...newRelevantTasks];
+    const newTasks = !draggedTask.completed
+      ? [...reorderedTasks, ...completedTasks]
+      : [...pendingTasks, ...reorderedTasks];
 
-        setTasks(newTasks);
+    const previousTasks = tasks;
+    setTasks(newTasks);
 
-        // Guardar el nuevo orden en la base de datos
-        try {
-          const orderMap = new Map(newTasks.map((task, index) => [task.id, index]));
-          
-          const { error } = await supabase
-            .from('personal_tasks')
-            .update({ order: orderMap.get(draggedTaskId) })
-            .eq('id', draggedTaskId);
+    // Guardar el nuevo orden en la base de datos
+    try {
+      const orderMap = new Map(newTasks.map((task, index) => [task.id, index]));
 
-          if (error) {
-            console.error("Error al guardar orden:", error);
-            // Revertir cambios si hay error
-            setTasks(tasks);
-          }
-        } catch (err) {
-          console.error("Error:", err);
-          setTasks(tasks);
-        }
+      const { error } = await supabase
+        .from('personal_tasks')
+        .update({ order: orderMap.get(active.id as string) })
+        .eq('id', active.id);
+
+      if (error) {
+        console.error("Error al guardar orden:", error);
+        setTasks(previousTasks);
       }
+    } catch (err) {
+      console.error("Error:", err);
+      setTasks(previousTasks);
     }
+  }, [tasks, pendingTasks, completedTasks]);
 
-    setDraggedTaskId(null);
-    setDragOverTaskId(null);
-  }, [draggedTaskId, tasks, pendingTasks, completedTasks]);
+  const handleDragCancel = useCallback(() => {
+    setActiveTaskId(null);
+  }, []);
 
   return (
     <Card className="mb-6 dark:bg-[#161A15] dark:border-[#161A15] bg-white border-gray-200">
@@ -682,79 +715,100 @@ const PersonalTasksManager = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Pendientes</h3>
-              <span className="text-xs dark:bg-yellow-500/20 dark:text-yellow-300 bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                {pendingTasks.length}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {pendingTasks.length === 0 ? (
-                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>¡No hay tareas pendientes!</p>
-                  <p className="text-xs mt-1">Agrega una nueva tarea</p>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Pendientes</h3>
+                <span className="text-xs dark:bg-yellow-500/20 dark:text-yellow-300 bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                  {pendingTasks.length}
+                </span>
+              </div>
+              <SortableContext items={pendingTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-3">
+                  {pendingTasks.length === 0 ? (
+                    <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                      <p>¡No hay tareas pendientes!</p>
+                      <p className="text-xs mt-1">Agrega una nueva tarea</p>
+                    </div>
+                  ) : (
+                    pendingTasks.map(task => (
+                      <SortableTaskItem
+                        key={task.id}
+                        task={task}
+                        onToggleComplete={toggleTaskComplete}
+                        onToggleExpanded={toggleExpanded}
+                        onDelete={deleteTask}
+                        onToggleSubtaskComplete={toggleSubtaskComplete}
+                        onDeleteSubtask={deleteSubtask}
+                        onAddSubtask={addSubtask}
+                        onUpdateNotes={updateNotes}
+                      />
+                    ))
+                  )}
                 </div>
-              ) : (
-                pendingTasks.map(task => (
-                  <PersonalTaskItem
-                    key={task.id}
-                    task={task}
-                    onToggleComplete={toggleTaskComplete}
-                    onToggleExpanded={toggleExpanded}
-                    onDelete={deleteTask}
-                    onToggleSubtaskComplete={toggleSubtaskComplete}
-                    onDeleteSubtask={deleteSubtask}
-                    onAddSubtask={addSubtask}
-                    onUpdateNotes={updateNotes}
-                    onDragStart={handleDragStart}
-                    onDragOver={(e) => handleDragOver(e, task.id)}
-                    onDrop={handleDrop}
-                    isDragging={draggedTaskId === task.id}
-                    isDragOver={dragOverTaskId === task.id}
-                  />
-                ))
-              )}
+              </SortableContext>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Completadas</h3>
+                <span className="text-xs dark:bg-green-500/20 dark:text-green-300 bg-green-100 text-green-800 px-2 py-1 rounded">
+                  {completedTasks.length}
+                </span>
+              </div>
+              <SortableContext items={completedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-3">
+                  {completedTasks.length === 0 ? (
+                    <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                      <p>No hay tareas completadas</p>
+                      <p className="text-xs mt-1">Completa algunas tareas</p>
+                    </div>
+                  ) : (
+                    completedTasks.map(task => (
+                      <SortableTaskItem
+                        key={task.id}
+                        task={task}
+                        onToggleComplete={toggleTaskComplete}
+                        onToggleExpanded={toggleExpanded}
+                        onDelete={deleteTask}
+                        onToggleSubtaskComplete={toggleSubtaskComplete}
+                        onDeleteSubtask={deleteSubtask}
+                        onAddSubtask={addSubtask}
+                        onUpdateNotes={updateNotes}
+                      />
+                    ))
+                  )}
+                </div>
+              </SortableContext>
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold dark:text-gray-300 text-gray-700 uppercase tracking-wide">Completadas</h3>
-              <span className="text-xs dark:bg-green-500/20 dark:text-green-300 bg-green-100 text-green-800 px-2 py-1 rounded">
-                {completedTasks.length}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {completedTasks.length === 0 ? (
-                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>No hay tareas completadas</p>
-                  <p className="text-xs mt-1">Completa algunas tareas</p>
-                </div>
-              ) : (
-                completedTasks.map(task => (
-                  <PersonalTaskItem
-                    key={task.id}
-                    task={task}
-                    onToggleComplete={toggleTaskComplete}
-                    onToggleExpanded={toggleExpanded}
-                    onDelete={deleteTask}
-                    onToggleSubtaskComplete={toggleSubtaskComplete}
-                    onDeleteSubtask={deleteSubtask}
-                    onAddSubtask={addSubtask}
-                    onUpdateNotes={updateNotes}
-                    onDragStart={handleDragStart}
-                    onDragOver={(e) => handleDragOver(e, task.id)}
-                    onDrop={handleDrop}
-                    isDragging={draggedTaskId === task.id}
-                    isDragOver={dragOverTaskId === task.id}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+          <DragOverlay dropAnimation={{
+            duration: 250,
+            easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+          }}>
+            {activeTask ? (
+              <DragOverlayItem
+                task={activeTask}
+                onToggleComplete={toggleTaskComplete}
+                onToggleExpanded={toggleExpanded}
+                onDelete={deleteTask}
+                onToggleSubtaskComplete={toggleSubtaskComplete}
+                onDeleteSubtask={deleteSubtask}
+                onAddSubtask={addSubtask}
+                onUpdateNotes={updateNotes}
+                isOverlay
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </CardContent>
     </Card >
   );
