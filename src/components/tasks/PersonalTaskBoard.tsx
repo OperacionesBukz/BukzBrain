@@ -23,6 +23,7 @@ interface PersonalTask {
   expanded: boolean;
   created_by: string;
   created_at: string;
+  order?: number;
 }
 
 interface PersonalTaskItemProps {
@@ -34,6 +35,9 @@ interface PersonalTaskItemProps {
   onDeleteSubtask: (taskId: string, subtaskId: string) => void;
   onAddSubtask: (taskId: string, text: string) => void;
   onUpdateNotes: (taskId: string, notes: string) => void;
+  onDragStart: (e: React.DragEvent, taskId: string) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, taskId: string) => void;
 }
 
 const PersonalTaskItem = memo(({
@@ -45,6 +49,9 @@ const PersonalTaskItem = memo(({
   onDeleteSubtask,
   onAddSubtask,
   onUpdateNotes,
+  onDragStart,
+  onDragOver,
+  onDrop,
 }: PersonalTaskItemProps) => {
   const [newSubtaskText, setNewSubtaskText] = useState("");
   const [localNotes, setLocalNotes] = useState(task.notes || "");
@@ -87,7 +94,11 @@ const PersonalTaskItem = memo(({
 
   return (
     <div
-      className={`border rounded-lg p-3 transition-all ${task.completed
+      draggable
+      onDragStart={(e) => onDragStart(e, task.id)}
+      onDragOver={onDragOver}
+      onDrop={(e) => onDrop(e, task.id)}
+      className={`border rounded-lg p-3 transition-all cursor-move ${task.completed
         ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200"
         : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300"
         }`}
@@ -220,6 +231,8 @@ const PersonalTasksManager = () => {
   const [newTaskText, setNewTaskText] = useState("");
   const [showAddTask, setShowAddTask] = useState(false);
   const [currentUser, setCurrentUser] = useState("");
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -513,6 +526,77 @@ const PersonalTasksManager = () => {
   const pendingTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
 
+  const handleDragStart = useCallback((e: React.DragEvent, taskId: string) => {
+    setDraggedTaskId(taskId);
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent, targetTaskId: string) => {
+    e.preventDefault();
+    
+    if (!draggedTaskId || draggedTaskId === targetTaskId) {
+      setDraggedTaskId(null);
+      setDragOverTaskId(null);
+      return;
+    }
+
+    // Reordenar tareas
+    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+    const targetTask = tasks.find(t => t.id === targetTaskId);
+
+    if (!draggedTask || !targetTask) return;
+
+    // Si ambas tareas están en el mismo estado (pendiente/completada), reordenar
+    const draggedIsPending = !draggedTask.completed;
+    const targetIsPending = !targetTask.completed;
+
+    if (draggedIsPending === targetIsPending) {
+      const relevantTasks = draggedIsPending ? pendingTasks : completedTasks;
+      const draggedIndex = relevantTasks.findIndex(t => t.id === draggedTaskId);
+      const targetIndex = relevantTasks.findIndex(t => t.id === targetTaskId);
+
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        const newRelevantTasks = [...relevantTasks];
+        const [movedTask] = newRelevantTasks.splice(draggedIndex, 1);
+        newRelevantTasks.splice(targetIndex, 0, movedTask);
+
+        // Actualizar toda la lista de tareas manteniendo el orden
+        const newTasks = draggedIsPending
+          ? [...newRelevantTasks, ...completedTasks]
+          : [...pendingTasks, ...newRelevantTasks];
+
+        setTasks(newTasks);
+
+        // Guardar el nuevo orden en la base de datos
+        try {
+          const orderMap = new Map(newTasks.map((task, index) => [task.id, index]));
+          
+          const { error } = await supabase
+            .from('personal_tasks')
+            .update({ order: orderMap.get(draggedTaskId) })
+            .eq('id', draggedTaskId);
+
+          if (error) {
+            console.error("Error al guardar orden:", error);
+            // Revertir cambios si hay error
+            setTasks(tasks);
+          }
+        } catch (err) {
+          console.error("Error:", err);
+          setTasks(tasks);
+        }
+      }
+    }
+
+    setDraggedTaskId(null);
+    setDragOverTaskId(null);
+  }, [draggedTaskId, tasks, pendingTasks, completedTasks]);
+
   return (
     <Card className="mb-6 dark:bg-[#161A15] dark:border-[#161A15] bg-white border-gray-200">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -595,6 +679,9 @@ const PersonalTasksManager = () => {
                     onDeleteSubtask={deleteSubtask}
                     onAddSubtask={addSubtask}
                     onUpdateNotes={updateNotes}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
                   />
                 ))
               )}
@@ -626,6 +713,9 @@ const PersonalTasksManager = () => {
                     onDeleteSubtask={deleteSubtask}
                     onAddSubtask={addSubtask}
                     onUpdateNotes={updateNotes}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
                   />
                 ))
               )}
