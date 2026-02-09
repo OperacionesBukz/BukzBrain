@@ -38,6 +38,8 @@ interface PersonalTaskItemProps {
   onDragStart: (e: React.DragEvent, taskId: string) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, taskId: string) => void;
+  isDragging: boolean;
+  isDragOver: boolean;
 }
 
 const PersonalTaskItem = memo(({
@@ -52,6 +54,8 @@ const PersonalTaskItem = memo(({
   onDragStart,
   onDragOver,
   onDrop,
+  isDragging,
+  isDragOver,
 }: PersonalTaskItemProps) => {
   const [newSubtaskText, setNewSubtaskText] = useState("");
   const [localNotes, setLocalNotes] = useState(task.notes || "");
@@ -98,10 +102,23 @@ const PersonalTaskItem = memo(({
       onDragStart={(e) => onDragStart(e, task.id)}
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, task.id)}
-      className={`border rounded-lg p-3 transition-all cursor-move ${task.completed
-        ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200"
-        : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300"
+      className={`border rounded-lg p-3 transition-all duration-200 cursor-move select-none
+        ${isDragging 
+          ? "opacity-50 dark:bg-[#1a1a1a] scale-95" 
+          : isDragOver 
+          ? "dark:bg-[#3a3a3a] dark:border-blue-500 bg-blue-50 border-blue-300 shadow-md scale-102"
+          : task.completed
+          ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200 hover:dark:bg-[#353535] hover:dark:shadow-lg hover:shadow-sm"
+          : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300 hover:dark:bg-[#353535] hover:dark:shadow-lg hover:shadow-sm"
         }`}
+      style={{
+        transform: isDragOver ? 'scale(1.02)' : isDragging ? 'scale(0.95)' : 'scale(1)',
+        boxShadow: isDragOver 
+          ? '0 10px 25px rgba(59, 130, 246, 0.2)' 
+          : isDragging 
+          ? 'none'
+          : 'none'
+      }}
     >
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center">
@@ -529,11 +546,19 @@ const PersonalTasksManager = () => {
   const handleDragStart = useCallback((e: React.DragEvent, taskId: string) => {
     setDraggedTaskId(taskId);
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setDragImage(new Image(), 0, 0); // Imagen de drag personalizada vacía
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent, taskId?: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    if (taskId) {
+      setDragOverTaskId(taskId);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverTaskId(null);
   }, []);
 
   const handleDrop = useCallback(async (e: React.DragEvent, targetTaskId: string) => {
@@ -549,7 +574,11 @@ const PersonalTasksManager = () => {
     const draggedTask = tasks.find(t => t.id === draggedTaskId);
     const targetTask = tasks.find(t => t.id === targetTaskId);
 
-    if (!draggedTask || !targetTask) return;
+    if (!draggedTask || !targetTask) {
+      setDraggedTaskId(null);
+      setDragOverTaskId(null);
+      return;
+    }
 
     // Si ambas tareas están en el mismo estado (pendiente/completada), reordenar
     const draggedIsPending = !draggedTask.completed;
@@ -680,8 +709,10 @@ const PersonalTasksManager = () => {
                     onAddSubtask={addSubtask}
                     onUpdateNotes={updateNotes}
                     onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
+                    onDragOver={(e) => handleDragOver(e, task.id)}
                     onDrop={handleDrop}
+                    isDragging={draggedTaskId === task.id}
+                    isDragOver={dragOverTaskId === task.id}
                   />
                 ))
               )}
@@ -714,8 +745,10 @@ const PersonalTasksManager = () => {
                     onAddSubtask={addSubtask}
                     onUpdateNotes={updateNotes}
                     onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
+                    onDragOver={(e) => handleDragOver(e, task.id)}
                     onDrop={handleDrop}
+                    isDragging={draggedTaskId === task.id}
+                    isDragOver={dragOverTaskId === task.id}
                   />
                 ))
               )}
