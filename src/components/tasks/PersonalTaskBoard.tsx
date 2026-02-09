@@ -1,4 +1,21 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +40,7 @@ interface PersonalTask {
   expanded: boolean;
   created_by: string;
   created_at: string;
+  position?: number;
 }
 
 interface PersonalTaskItemProps {
@@ -56,11 +74,11 @@ const PersonalTaskItem = memo(({
 
   const handleNotesChange = (value: string) => {
     setLocalNotes(value);
-    
+
     if (notesTimeoutRef.current) {
       clearTimeout(notesTimeoutRef.current);
     }
-    
+
     notesTimeoutRef.current = setTimeout(() => {
       onUpdateNotes(task.id, value);
     }, 1000);
@@ -87,21 +105,20 @@ const PersonalTaskItem = memo(({
 
   return (
     <div
-      className={`border rounded-lg p-3 transition-all ${
-        task.completed 
-          ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200"
-          : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300"
-      }`}
+      className={`border rounded-lg p-3 transition-all ${task.completed
+        ? "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-green-50 border-green-200"
+        : "dark:bg-[#2d2d2d] dark:border-[#2d2d2d] bg-gray-100 border-gray-300"
+        }`}
     >
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center">
-          <Checkbox 
+          <Checkbox
             checked={task.completed}
             onCheckedChange={() => onToggleComplete(task.id)}
             className="h-5 w-5"
           />
         </div>
-        
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <p className={`font-medium ${task.completed ? "dark:text-green-400 dark:line-through text-green-600 line-through" : "dark:text-white text-gray-900"}`}>
@@ -134,11 +151,11 @@ const PersonalTaskItem = memo(({
               </Button>
             </div>
           </div>
-          
+
           {progress && (
             <div className="mt-2">
               <div className="h-1.5 dark:bg-[#3a3a3a] bg-gray-300 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-green-500 transition-all duration-300"
                   style={{ width: `${progress.percentage}%` }}
                 />
@@ -166,7 +183,7 @@ const PersonalTaskItem = memo(({
           <div className="space-y-2">
             <label className="text-xs dark:text-gray-400 text-gray-600">Subtareas</label>
             {task.subtasks.map((subtask) => (
-              <div 
+              <div
                 key={subtask.id}
                 className="flex items-center gap-2 py-1"
               >
@@ -216,6 +233,29 @@ const PersonalTaskItem = memo(({
 
 PersonalTaskItem.displayName = 'PersonalTaskItem';
 
+interface SortableTaskItemProps extends PersonalTaskItemProps { }
+
+const SortableTaskItem = ({ task, ...props }: SortableTaskItemProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <PersonalTaskItem task={task} {...props} />
+    </div>
+  );
+};
+
 const PersonalTasksManager = () => {
   const [tasks, setTasks] = useState<PersonalTask[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
@@ -226,19 +266,66 @@ const PersonalTasksManager = () => {
   useEffect(() => {
     const username = localStorage.getItem("username") || "Usuario";
     setCurrentUser(username);
-    
+
     console.log('🚀 PersonalTasksManager iniciando para:', username);
     loadTasks(username);
   }, []);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      setTasks((items) => {
+        const oldIndex = items.findIndex((t) => t.id === active.id);
+        const newIndex = items.findIndex((t) => t.id === over?.id);
+
+        const newItems = arrayMove(items, oldIndex, newIndex);
+
+        // Update positions in backend
+        // This assumes we are only reordering within the displayed list
+        // and that 'tasks' state reflects the order we want to save
+
+        const updates = newItems.map((task, index) => ({
+          id: task.id,
+          position: index,
+        }));
+
+        // Fire and forget update for better UX responsiveness
+        updates.forEach(update => {
+          supabase
+            .from('personal_tasks')
+            .update({ position: update.position })
+            .eq('id', update.id)
+            .then(({ error }) => {
+              if (error) console.error('Error updating position:', error);
+            });
+        });
+
+        return newItems;
+      });
+    }
+  };
+
   const loadTasks = async (username: string) => {
     try {
       console.log('📥 Cargando tareas para usuario:', username);
-      
+
       const { data, error } = await supabase
         .from('personal_tasks')
         .select('*')
         .eq('created_by', username)
+        .order('position', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -253,7 +340,7 @@ const PersonalTasksManager = () => {
 
       setTasks((prevTasks) => {
         const expandedMap = new Map(prevTasks.map(t => [t.id, t.expanded]));
-        
+
         return (data || []).map(task => ({
           ...task,
           notes: task.notes || "",
@@ -261,7 +348,7 @@ const PersonalTasksManager = () => {
           expanded: expandedMap.get(task.id) ?? false
         }));
       });
-      
+
       console.log('✅ Tareas personales cargadas:', data?.length || 0);
     } catch (err) {
       console.error("Error inesperado:", err);
@@ -306,9 +393,10 @@ const PersonalTasksManager = () => {
         notes: newTask.notes,
         subtasks: newTask.subtasks,
         created_by: newTask.created_by,
-        created_at: newTask.created_at
+        created_at: newTask.created_at,
+        position: tasks.length // Append to end
       }]);
-      
+
       if (error) {
         console.error("Error:", error);
         setTasks(prev => prev.filter(t => t.id !== newTask.id));
@@ -336,8 +424,8 @@ const PersonalTasksManager = () => {
     const newCompleted = !task.completed;
     const updatedSubtasks = task.subtasks.map(st => ({ ...st, completed: newCompleted }));
 
-    setTasks(prev => prev.map(t => 
-      t.id === taskId 
+    setTasks(prev => prev.map(t =>
+      t.id === taskId
         ? { ...t, completed: newCompleted, subtasks: updatedSubtasks }
         : t
     ));
@@ -350,8 +438,8 @@ const PersonalTasksManager = () => {
 
       if (error) {
         console.error("Error:", error);
-        setTasks(prev => prev.map(t => 
-          t.id === taskId 
+        setTasks(prev => prev.map(t =>
+          t.id === taskId
             ? { ...t, completed: task.completed, subtasks: task.subtasks }
             : t
         ));
@@ -375,7 +463,7 @@ const PersonalTasksManager = () => {
 
     try {
       const { error } = await supabase.from('personal_tasks').delete().eq('id', taskId);
-      
+
       if (error) {
         console.error("Error:", error);
         setTasks(prev => [...prev, taskToDelete]);
@@ -400,8 +488,8 @@ const PersonalTasksManager = () => {
 
     const allSubtasksComplete = updatedSubtasks.length > 0 && updatedSubtasks.every(st => st.completed);
 
-    setTasks(prev => prev.map(t => 
-      t.id === taskId 
+    setTasks(prev => prev.map(t =>
+      t.id === taskId
         ? { ...t, subtasks: updatedSubtasks, completed: allSubtasksComplete }
         : t
     ));
@@ -427,8 +515,8 @@ const PersonalTasksManager = () => {
     const oldSubtasks = task.subtasks;
     const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
 
-    setTasks(prev => prev.map(t => 
-      t.id === taskId 
+    setTasks(prev => prev.map(t =>
+      t.id === taskId
         ? { ...t, subtasks: updatedSubtasks }
         : t
     ));
@@ -441,8 +529,8 @@ const PersonalTasksManager = () => {
 
       if (error) {
         console.error("Error:", error);
-        setTasks(prev => prev.map(t => 
-          t.id === taskId 
+        setTasks(prev => prev.map(t =>
+          t.id === taskId
             ? { ...t, subtasks: oldSubtasks }
             : t
         ));
@@ -464,8 +552,8 @@ const PersonalTasksManager = () => {
 
     const updatedSubtasks = [...task.subtasks, newSubtask];
 
-    setTasks(prev => prev.map(t => 
-      t.id === taskId 
+    setTasks(prev => prev.map(t =>
+      t.id === taskId
         ? { ...t, subtasks: updatedSubtasks }
         : t
     ));
@@ -478,8 +566,8 @@ const PersonalTasksManager = () => {
 
       if (error) {
         console.error("Error:", error);
-        setTasks(prev => prev.map(t => 
-          t.id === taskId 
+        setTasks(prev => prev.map(t =>
+          t.id === taskId
             ? { ...t, subtasks: task.subtasks }
             : t
         ));
@@ -493,7 +581,7 @@ const PersonalTasksManager = () => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    setTasks(prev => prev.map(t => 
+    setTasks(prev => prev.map(t =>
       t.id === taskId ? { ...t, notes } : t
     ));
 
@@ -525,7 +613,7 @@ const PersonalTasksManager = () => {
           </div>
         </div>
         {!showAddTask && (
-          <Button 
+          <Button
             onClick={() => setShowAddTask(true)}
             size="sm"
             variant="ghost"
@@ -536,7 +624,7 @@ const PersonalTasksManager = () => {
           </Button>
         )}
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {showAddTask && (
           <div className="flex gap-2 pb-4 dark:border-[#3a3a3a] border-gray-300 border-b">
@@ -548,15 +636,15 @@ const PersonalTasksManager = () => {
               className="dark:bg-[#1a1a1a] dark:border-[#3a3a3a] dark:text-white bg-white border-gray-300 text-gray-900 flex-1 focus-visible:ring-0 focus-visible:ring-offset-0"
               autoFocus
             />
-            <Button 
-              onClick={addTask} 
+            <Button
+              onClick={addTask}
               size="sm"
               className="flex-shrink-0 bg-[#F7DC6F] hover:bg-[#F7DC6F]/90 text-black"
             >
               <Plus className="h-4 w-4 mr-1" />
               Crear
             </Button>
-            <Button 
+            <Button
               onClick={() => {
                 setShowAddTask(false);
                 setNewTaskText("");
@@ -578,28 +666,37 @@ const PersonalTasksManager = () => {
                 {pendingTasks.length}
               </span>
             </div>
-            <div className="space-y-3">
-              {pendingTasks.length === 0 ? (
-                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
-                  <p>¡No hay tareas pendientes!</p>
-                  <p className="text-xs mt-1">Agrega una nueva tarea</p>
-                </div>
-              ) : (
-                pendingTasks.map(task => (
-                  <PersonalTaskItem
-                    key={task.id}
-                    task={task}
-                    onToggleComplete={toggleTaskComplete}
-                    onToggleExpanded={toggleExpanded}
-                    onDelete={deleteTask}
-                    onToggleSubtaskComplete={toggleSubtaskComplete}
-                    onDeleteSubtask={deleteSubtask}
-                    onAddSubtask={addSubtask}
-                    onUpdateNotes={updateNotes}
-                  />
-                ))
-              )}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={pendingTasks.map(t => t.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {pendingTasks.length === 0 ? (
+                  <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                    <p>¡No hay tareas pendientes!</p>
+                    <p className="text-xs mt-1">Agrega una nueva tarea</p>
+                  </div>
+                ) : (
+                  pendingTasks.map(task => (
+                    <SortableTaskItem
+                      key={task.id}
+                      task={task}
+                      onToggleComplete={toggleTaskComplete}
+                      onToggleExpanded={toggleExpanded}
+                      onDelete={deleteTask}
+                      onToggleSubtaskComplete={toggleSubtaskComplete}
+                      onDeleteSubtask={deleteSubtask}
+                      onAddSubtask={addSubtask}
+                      onUpdateNotes={updateNotes}
+                    />
+                  ))
+                )}
+              </SortableContext>
+            </DndContext>
           </div>
 
           <div>
@@ -634,7 +731,7 @@ const PersonalTasksManager = () => {
           </div>
         </div>
       </CardContent>
-    </Card>
+    </Card >
   );
 };
 
