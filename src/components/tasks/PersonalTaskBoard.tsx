@@ -1,21 +1,4 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +23,6 @@ interface PersonalTask {
   expanded: boolean;
   created_by: string;
   created_at: string;
-  position?: number;
 }
 
 interface PersonalTaskItemProps {
@@ -233,29 +215,6 @@ const PersonalTaskItem = memo(({
 
 PersonalTaskItem.displayName = 'PersonalTaskItem';
 
-interface SortableTaskItemProps extends PersonalTaskItemProps { }
-
-const SortableTaskItem = ({ task, ...props }: SortableTaskItemProps) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: task.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <PersonalTaskItem task={task} {...props} />
-    </div>
-  );
-};
-
 const PersonalTasksManager = () => {
   const [tasks, setTasks] = useState<PersonalTask[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
@@ -271,52 +230,6 @@ const PersonalTasksManager = () => {
     loadTasks(username);
   }, []);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (active.id !== over?.id) {
-      setTasks((items) => {
-        const oldIndex = items.findIndex((t) => t.id === active.id);
-        const newIndex = items.findIndex((t) => t.id === over?.id);
-
-        const newItems = arrayMove(items, oldIndex, newIndex);
-
-        // Update positions in backend
-        // This assumes we are only reordering within the displayed list
-        // and that 'tasks' state reflects the order we want to save
-
-        const updates = newItems.map((task, index) => ({
-          id: task.id,
-          position: index,
-        }));
-
-        // Fire and forget update for better UX responsiveness
-        updates.forEach(update => {
-          supabase
-            .from('personal_tasks')
-            .update({ position: update.position })
-            .eq('id', update.id)
-            .then(({ error }) => {
-              if (error) console.error('Error updating position:', error);
-            });
-        });
-
-        return newItems;
-      });
-    }
-  };
-
   const loadTasks = async (username: string) => {
     try {
       console.log('📥 Cargando tareas para usuario:', username);
@@ -325,7 +238,6 @@ const PersonalTasksManager = () => {
         .from('personal_tasks')
         .select('*')
         .eq('created_by', username)
-        .order('position', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -393,8 +305,7 @@ const PersonalTasksManager = () => {
         notes: newTask.notes,
         subtasks: newTask.subtasks,
         created_by: newTask.created_by,
-        created_at: newTask.created_at,
-        position: tasks.length // Append to end
+        created_at: newTask.created_at
       }]);
 
       if (error) {
@@ -666,37 +577,28 @@ const PersonalTasksManager = () => {
                 {pendingTasks.length}
               </span>
             </div>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={pendingTasks.map(t => t.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {pendingTasks.length === 0 ? (
-                  <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
-                    <p>¡No hay tareas pendientes!</p>
-                    <p className="text-xs mt-1">Agrega una nueva tarea</p>
-                  </div>
-                ) : (
-                  pendingTasks.map(task => (
-                    <SortableTaskItem
-                      key={task.id}
-                      task={task}
-                      onToggleComplete={toggleTaskComplete}
-                      onToggleExpanded={toggleExpanded}
-                      onDelete={deleteTask}
-                      onToggleSubtaskComplete={toggleSubtaskComplete}
-                      onDeleteSubtask={deleteSubtask}
-                      onAddSubtask={addSubtask}
-                      onUpdateNotes={updateNotes}
-                    />
-                  ))
-                )}
-              </SortableContext>
-            </DndContext>
+            <div className="space-y-3">
+              {pendingTasks.length === 0 ? (
+                <div className="text-center py-8 dark:text-gray-500 text-gray-600 text-sm dark:border-[#3a3a3a] border-gray-300 border-dashed rounded-lg h-32 flex flex-col items-center justify-center">
+                  <p>¡No hay tareas pendientes!</p>
+                  <p className="text-xs mt-1">Agrega una nueva tarea</p>
+                </div>
+              ) : (
+                pendingTasks.map(task => (
+                  <PersonalTaskItem
+                    key={task.id}
+                    task={task}
+                    onToggleComplete={toggleTaskComplete}
+                    onToggleExpanded={toggleExpanded}
+                    onDelete={deleteTask}
+                    onToggleSubtaskComplete={toggleSubtaskComplete}
+                    onDeleteSubtask={deleteSubtask}
+                    onAddSubtask={addSubtask}
+                    onUpdateNotes={updateNotes}
+                  />
+                ))
+              )}
+            </div>
           </div>
 
           <div>
