@@ -264,7 +264,14 @@ const SortableTaskItem = memo((props: PersonalTaskItemProps) => {
       {...attributes}
       {...listeners}
     >
-      <TaskItemContent {...props} />
+      <div onKeyDown={(e) => {
+        const tag = (e.target as HTMLElement).tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+          e.stopPropagation();
+        }
+      }}>
+        <TaskItemContent {...props} />
+      </div>
     </div>
   );
 });
@@ -307,6 +314,11 @@ const PersonalTasksManager = () => {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: {
+        start: ['Space'],
+        cancel: ['Escape'],
+        end: ['Space'],
+      },
     })
   );
 
