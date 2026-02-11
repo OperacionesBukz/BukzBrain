@@ -50,7 +50,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .single();
 
       if (error || !data) {
-        // Tabla profiles no existe o usuario sin perfil - usar fallback
         return fallbackUser;
       }
 
@@ -61,56 +60,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role: data.role || "employee",
       };
     } catch (err) {
-      // Error de red o tabla no existe - usar fallback
       return fallbackUser;
     }
+  };
+
+  const handleUserSession = (supabaseUser: User) => {
+    // NO usar await aqui — lanzar como fire-and-forget para no bloquear onAuthStateChange
+    loadProfile(supabaseUser).then((profile) => {
+      setUser(profile);
+    });
   };
 
   useEffect(() => {
     let mounted = true;
 
-    // Timeout de seguridad: si getSession tarda mas de 5s, dejar de cargar
     const timeout = setTimeout(() => {
       if (mounted && loading) {
         setLoading(false);
       }
     }, 5000);
 
-    const initAuth = async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-
-        if (!mounted) return;
-
-        if (currentSession?.user) {
-          setSession(currentSession);
-          const profile = await loadProfile(currentSession.user);
-          if (mounted) setUser(profile);
-        }
-      } catch (err) {
-        console.error("Error al inicializar auth:", err);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    initAuth();
-
+    // Primero registrar el listener, luego obtener la sesion
+    // Esto es lo recomendado por Supabase para evitar race conditions
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      (event, newSession) => {
         if (!mounted) return;
 
+        console.log("[AUTH] onAuthStateChange:", event);
         setSession(newSession);
         setLoading(false);
 
-        if (event === "SIGNED_IN" && newSession?.user) {
-          const profile = await loadProfile(newSession.user);
-          if (mounted) setUser(profile);
+        if (newSession?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED")) {
+          handleUserSession(newSession.user);
         } else if (event === "SIGNED_OUT") {
           setUser(null);
         }
       }
     );
+
+    // getSession dispara INITIAL_SESSION en el listener de arriba
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      if (!mounted) return;
+      // Si no hubo sesion, asegurarse de dejar de cargar
+      if (!currentSession) {
+        setLoading(false);
+      }
+    });
 
     return () => {
       mounted = false;
@@ -126,14 +121,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email,
         password,
       });
-      console.log("[AUTH] Respuesta signIn:", { data, error });
+      console.log("[AUTH] Respuesta signIn:", { data: !!data, error: error?.message });
 
       if (error) {
-        console.log("[AUTH] Error de Supabase:", error.message);
         return { error: "Usuario o contraseña incorrectos" };
       }
 
-      console.log("[AUTH] Login exitoso, usuario:", data.user?.id);
       return { error: null };
     } catch (err) {
       console.error("[AUTH] Error catch:", err);
