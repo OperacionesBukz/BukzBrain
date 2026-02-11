@@ -23,7 +23,9 @@ const Login = () => {
     setIsLoading(true);
 
     try {
+      console.log("[LOGIN] Llamando signIn...");
       const { error: signInError } = await signIn(email, password);
+      console.log("[LOGIN] signIn retornó:", signInError);
 
       if (signInError) {
         setError(signInError);
@@ -31,13 +33,14 @@ const Login = () => {
         return;
       }
 
+      console.log("[LOGIN] Redirigiendo a home...");
       // Login exitoso - redirigir a home
       setTimeout(() => {
         navigate("/", { replace: true });
         setIsLoading(false);
       }, 500);
     } catch (err) {
-      console.error("Error en login:", err);
+      console.error("[LOGIN] Error catch:", err);
       setError("Error al iniciar sesión. Por favor intenta de nuevo.");
       setIsLoading(false);
     }

@@ -121,18 +121,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log("[AUTH] Intentando signIn con:", email);
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+      console.log("[AUTH] Respuesta signIn:", { data, error });
 
       if (error) {
-        return { error: "Usuario o contrasena incorrectos" };
+        console.log("[AUTH] Error de Supabase:", error.message);
+        return { error: "Usuario o contraseña incorrectos" };
       }
 
+      console.log("[AUTH] Login exitoso, usuario:", data.user?.id);
       return { error: null };
     } catch (err) {
-      return { error: "Error al iniciar sesion. Por favor intenta de nuevo." };
+      console.error("[AUTH] Error catch:", err);
+      return { error: "Error al iniciar sesión. Por favor intenta de nuevo." };
     }
   };
 
