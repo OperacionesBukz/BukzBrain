@@ -6,15 +6,17 @@ import logoImage from "@/assets/logo-bukz.png";
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { SettingsModal } from "@/components/SettingsModal";
+import { useAuth } from "@/contexts/AuthContext";
 
 const AppLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, signOut } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  const username = localStorage.getItem("username") || "";
+  const username = user?.username || "";
 
   const navItems = [
     { id: "home", label: "Inicio", icon: Home, path: "/" },
@@ -157,10 +159,8 @@ const AppLayout = () => {
               </button>
 
               <button
-                onClick={() => {
-                  localStorage.removeItem("isAuthenticated");
-                  localStorage.removeItem("userRole");
-                  localStorage.removeItem("username");
+                onClick={async () => {
+                  await signOut();
                   navigate("/login");
                 }}
                 className={cn(

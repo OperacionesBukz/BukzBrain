@@ -1,7 +1,9 @@
 import PersonalTaskBoard from "@/components/tasks/PersonalTaskBoard";
+import { useAuth } from "@/contexts/AuthContext";
 
 const MyTasks = () => {
-  const currentUser = localStorage.getItem("username") || "Usuario";
+  const { user } = useAuth();
+  const currentUser = user?.username || "Usuario";
 
   return (
     <div className="p-8">

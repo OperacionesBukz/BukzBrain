@@ -7,10 +7,4 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Las variables de entorno de Supabase no están configuradas')
 }
 
-console.log('🔑 Key length:', supabaseAnonKey.length)
-console.log('🔑 Key ends with:', supabaseAnonKey.slice(-10))
-
-// Cliente normal con key limpia
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-console.log('✅ Supabase inicializado')

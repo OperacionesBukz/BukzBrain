@@ -1,24 +1,32 @@
 import { Navigate } from "react-router-dom";
 import { ReactNode } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ProtectedRouteProps {
   children: ReactNode;
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  // Verificar autenticación en localStorage
-  const isAuthenticated = localStorage.getItem("isAuthenticated");
-  
-  console.log("ProtectedRoute check:", { isAuthenticated });
-  
-  // Si NO está autenticado, redirigir a login
-  if (!isAuthenticated || isAuthenticated !== "true") {
-    console.log("No autenticado, redirigiendo a login");
+  const { user, loading } = useAuth();
+
+  // Mientras carga la sesion, mostrar pantalla de carga
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F7DC6F] mx-auto mb-4"></div>
+          <p className="text-sm text-gray-400">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si NO esta autenticado, redirigir a login
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
-  console.log("Autenticado, mostrando contenido");
-  // Si está autenticado, mostrar el contenido
+
+  // Si esta autenticado, mostrar el contenido
   return <>{children}</>;
 };
 

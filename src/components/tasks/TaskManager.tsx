@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, StickyNote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   DndContext,
   closestCenter,
@@ -269,10 +270,12 @@ const TaskManager = () => {
   const [newTaskText, setNewTaskText] = useState("");
   const [showAddTask, setShowAddTask] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState<{ [key: string]: string }>({});
-  const [currentUser, setCurrentUser] = useState("");
   const [usePolling, setUsePolling] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const currentUser = user?.username || "Usuario";
+  const userId = user?.id || "";
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -289,69 +292,47 @@ const TaskManager = () => {
   );
 
   useEffect(() => {
-    const username = localStorage.getItem("username") || "Usuario";
-    setCurrentUser(username);
-    
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🚀 INICIANDO TaskManager');
-    console.log('👤 Usuario:', username);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+    if (!userId) return;
+
     loadTasks();
 
-    console.log('📡 Intentando conectar con Realtime...');
-    
     const channel = supabase
       .channel('tasks-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
         (payload) => {
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('🔥 ¡CAMBIO RECIBIDO VÍA REALTIME!');
-          console.log('⏰ Timestamp:', new Date().toLocaleTimeString());
-          console.log('📋 Tipo:', payload.eventType);
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           handleRealtimeUpdate(payload);
         }
       )
       .subscribe((status, err) => {
-        console.log('📊 Estado de suscripción:', status);
-        
         if (err) {
-          console.error('❌ Error Realtime:', err);
-          console.warn('⚠️ Cambiando a modo POLLING...');
           setUsePolling(true);
         }
-        
+
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime ACTIVO');
           setUsePolling(false);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('⚠️ Realtime falló, usando POLLING');
           setUsePolling(true);
         }
       });
 
     let pollingInterval: NodeJS.Timeout;
-    
+
     const pollingTimeout = setTimeout(() => {
       if (usePolling) {
-        console.log('🔄 Iniciando polling cada 3 segundos...');
         pollingInterval = setInterval(() => {
-          console.log('🔄 Recargando tareas (polling)...');
           loadTasks();
         }, 3000);
       }
     }, 3000);
 
     return () => {
-      console.log('🔌 Limpiando conexiones...');
       supabase.removeChannel(channel);
       clearTimeout(pollingTimeout);
       if (pollingInterval) clearInterval(pollingInterval);
     };
-  }, [usePolling]);
+  }, [usePolling, userId]);
 
   const handleRealtimeUpdate = (payload: any) => {
     if (payload.eventType === 'INSERT') {
@@ -435,10 +416,9 @@ const TaskManager = () => {
     setShowAddTask(false);
 
     try {
-      const { error } = await supabase.from('tasks').insert([newTask]);
-      
+      const { error } = await supabase.from('tasks').insert([{ ...newTask, user_id: userId }]);
+
       if (error) {
-        console.error("Error:", error);
         setTasks(prev => prev.filter(t => t.id !== newTask.id));
         toast({
           title: "Error",

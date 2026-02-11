@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2, StickyNote, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   DndContext,
   closestCenter,
@@ -302,9 +303,11 @@ const PersonalTasksManager = () => {
   const [tasks, setTasks] = useState<PersonalTask[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [showAddTask, setShowAddTask] = useState(false);
-  const [currentUser, setCurrentUser] = useState("");
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const currentUser = user?.username || "Usuario";
+  const userId = user?.id || "";
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -323,25 +326,20 @@ const PersonalTasksManager = () => {
   );
 
   useEffect(() => {
-    const username = localStorage.getItem("username") || "Usuario";
-    setCurrentUser(username);
+    if (userId) {
+      loadTasks(userId);
+    }
+  }, [userId]);
 
-    console.log('🚀 PersonalTasksManager iniciando para:', username);
-    loadTasks(username);
-  }, []);
-
-  const loadTasks = async (username: string) => {
+  const loadTasks = async (uid: string) => {
     try {
-      console.log('📥 Cargando tareas para usuario:', username);
-
       const { data, error } = await supabase
         .from('personal_tasks')
         .select('*')
-        .eq('created_by', username)
+        .eq('user_id', uid)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error("Error al cargar tareas personales:", error);
         toast({
           title: "Error",
           description: `Error: ${error.message}`,
@@ -361,9 +359,7 @@ const PersonalTasksManager = () => {
         }));
       });
 
-      console.log('✅ Tareas personales cargadas:', data?.length || 0);
     } catch (err) {
-      console.error("Error inesperado:", err);
       toast({
         title: "Error",
         description: "Error inesperado al cargar tareas",
@@ -405,6 +401,7 @@ const PersonalTasksManager = () => {
         notes: newTask.notes,
         subtasks: newTask.subtasks,
         created_by: newTask.created_by,
+        user_id: userId,
         created_at: newTask.created_at
       }]);
 
