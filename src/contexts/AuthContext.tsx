@@ -33,7 +33,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   // Cargar perfil del usuario desde la tabla profiles
-  const loadProfile = async (supabaseUser: User): Promise<AuthUser | null> => {
+  // Si la tabla no existe o no hay perfil, usa el email como fallback
+  const loadProfile = async (supabaseUser: User): Promise<AuthUser> => {
+    const fallbackUser: AuthUser = {
+      id: supabaseUser.id,
+      email: supabaseUser.email || "",
+      username: supabaseUser.email?.split("@")[0] || "Usuario",
+      role: "employee",
+    };
+
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -42,8 +50,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .single();
 
       if (error || !data) {
-        console.error("Error al cargar perfil:", error);
-        return null;
+        // Tabla profiles no existe o usuario sin perfil - usar fallback
+        return fallbackUser;
       }
 
       return {
@@ -53,8 +61,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role: data.role || "employee",
       };
     } catch (err) {
-      console.error("Error inesperado al cargar perfil:", err);
-      return null;
+      // Error de red o tabla no existe - usar fallback
+      return fallbackUser;
     }
   };
 

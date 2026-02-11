@@ -34,7 +34,8 @@ const Login = () => {
       // Login exitoso - redirigir a home
       setTimeout(() => {
         navigate("/", { replace: true });
-      }, 100);
+        setIsLoading(false);
+      }, 500);
     } catch (err) {
       console.error("Error en login:", err);
       setError("Error al iniciar sesión. Por favor intenta de nuevo.");
