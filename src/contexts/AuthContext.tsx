@@ -59,33 +59,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    // Obtener sesion actual al cargar
+    let mounted = true;
+
+    // Timeout de seguridad: si getSession tarda mas de 5s, dejar de cargar
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        setLoading(false);
+      }
+    }, 5000);
+
     const initAuth = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
 
+        if (!mounted) return;
+
         if (currentSession?.user) {
           setSession(currentSession);
           const profile = await loadProfile(currentSession.user);
-          setUser(profile);
+          if (mounted) setUser(profile);
         }
       } catch (err) {
         console.error("Error al inicializar auth:", err);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     initAuth();
 
-    // Escuchar cambios de sesion (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
+        if (!mounted) return;
+
         setSession(newSession);
+        setLoading(false);
 
         if (event === "SIGNED_IN" && newSession?.user) {
           const profile = await loadProfile(newSession.user);
-          setUser(profile);
+          if (mounted) setUser(profile);
         } else if (event === "SIGNED_OUT") {
           setUser(null);
         }
@@ -93,6 +105,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     return () => {
+      mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, []);
