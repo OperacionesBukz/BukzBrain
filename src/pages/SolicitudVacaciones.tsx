@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import emailjs from '@emailjs/browser';
+import { sendEmail } from "@/services/emailService";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +41,7 @@ const SolicitudVacaciones = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validaciones
     if (!formData.solicitante || !formData.cargo || !formData.sede || !formData.documento || !formData.jefe_inmediato) {
       toast({
@@ -64,25 +64,27 @@ const SolicitudVacaciones = () => {
     setIsLoading(true);
 
     try {
-      // Preparar datos para EmailJS
-      const templateParams = {
-        solicitante: formData.solicitante,
-        cargo: formData.cargo,
-        sede: formData.sede,
-        documento: formData.documento,
-        fecha_inicio: format(fechaInicio, "dd/MM/yyyy", { locale: es }),
-        fecha_fin: format(fechaFin, "dd/MM/yyyy", { locale: es }),
-        fecha_reingreso: format(fechaReingreso, "dd/MM/yyyy", { locale: es }),
-        jefe_inmediato: formData.jefe_inmediato
-      };
+      // Construir HTML del correo
+      const htmlContent = `
+        <h2>Solicitud de Vacaciones</h2>
+        <table style="border-collapse: collapse; width: 100%;">
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Solicitante</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.solicitante}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Documento</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.documento}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Cargo</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.cargo}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Sede</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.sede}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Fecha Inicio</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${format(fechaInicio, "dd/MM/yyyy", { locale: es })}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Fecha Fin</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${format(fechaFin, "dd/MM/yyyy", { locale: es })}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Fecha Reingreso</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${format(fechaReingreso, "dd/MM/yyyy", { locale: es })}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Jefe Inmediato</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.jefe_inmediato}</td></tr>
+        </table>
+      `;
 
-      // Enviar correo con EmailJS
-      await emailjs.send(
-        import.meta.env.VITE_EMAILJS_SERVICE_ID,
-        import.meta.env.VITE_EMAILJS_TEMPLATE_VACACIONES,
-        templateParams,
-        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
-      );
+      // Enviar correo con Brevo via Supabase Edge Function
+      await sendEmail({
+        to: "operaciones@bukz.co",
+        subject: `Solicitud de Vacaciones - ${formData.solicitante}`,
+        htmlContent,
+      });
 
       toast({
         title: "¡Solicitud enviada!",
@@ -138,215 +140,215 @@ const SolicitudVacaciones = () => {
             Completa el formulario para solicitar tus vacaciones
           </p>
         </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Datos Personales */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="solicitante" className="text-gray-300 text-sm">
-                    Nombre Completo *
-                  </Label>
-                  <Input
-                    id="solicitante"
-                    name="solicitante"
-                    value={formData.solicitante}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Juan Pérez"
-                    className="bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="documento" className="text-gray-300 text-sm">
-                    Documento de Identidad *
-                  </Label>
-                  <Input
-                    id="documento"
-                    name="documento"
-                    value={formData.documento}
-                    onChange={handleInputChange}
-                    placeholder="Ej: 1234567890"
-                    className="bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="cargo" className="text-gray-300 text-sm">
-                    Cargo *
-                  </Label>
-                  <Input
-                    id="cargo"
-                    name="cargo"
-                    value={formData.cargo}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Analista"
-                    className="bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="sede" className="text-gray-300 text-sm">
-                    Sede *
-                  </Label>
-                  <Input
-                    id="sede"
-                    name="sede"
-                    value={formData.sede}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Medellín"
-                    className="bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="jefe_inmediato" className="text-gray-300 text-sm">
-                    Jefe Inmediato *
-                  </Label>
-                  <Input
-                    id="jefe_inmediato"
-                    name="jefe_inmediato"
-                    value={formData.jefe_inmediato}
-                    onChange={handleInputChange}
-                    placeholder="Ej: María González"
-                    className="bg-white"
-                    required
-                  />
-                </div>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Datos Personales */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="solicitante" className="text-gray-300 text-sm">
+                  Nombre Completo *
+                </Label>
+                <Input
+                  id="solicitante"
+                  name="solicitante"
+                  value={formData.solicitante}
+                  onChange={handleInputChange}
+                  placeholder="Ej: Juan Pérez"
+                  className="bg-white"
+                  required
+                />
               </div>
 
-              {/* Fechas */}
-              <div className="space-y-3 pt-3 border-t border-gray-700">
-                <h3 className="text-base font-semibold text-white">Período de Vacaciones</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Fecha Inicio */}
-                  <div className="space-y-1.5">
-                    <Label className="text-gray-300 text-sm">Fecha de Inicio *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal bg-white",
-                            !fechaInicio && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fechaInicio ? format(fechaInicio, "PPP", { locale: es }) : "Seleccionar"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={fechaInicio}
-                          onSelect={setFechaInicio}
-                          locale={es}
-                          initialFocus
-                          weekStartsOn={1}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="documento" className="text-gray-300 text-sm">
+                  Documento de Identidad *
+                </Label>
+                <Input
+                  id="documento"
+                  name="documento"
+                  value={formData.documento}
+                  onChange={handleInputChange}
+                  placeholder="Ej: 1234567890"
+                  className="bg-white"
+                  required
+                />
+              </div>
 
-                  {/* Fecha Fin */}
-                  <div className="space-y-1.5">
-                    <Label className="text-gray-300 text-sm">Fecha de Finalización *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal bg-white",
-                            !fechaFin && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fechaFin ? format(fechaFin, "PPP", { locale: es }) : "Seleccionar"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={fechaFin}
-                          onSelect={setFechaFin}
-                          locale={es}
-                          disabled={(date) => fechaInicio ? date < fechaInicio : false}
-                          initialFocus
-                          weekStartsOn={1}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cargo" className="text-gray-300 text-sm">
+                  Cargo *
+                </Label>
+                <Input
+                  id="cargo"
+                  name="cargo"
+                  value={formData.cargo}
+                  onChange={handleInputChange}
+                  placeholder="Ej: Analista"
+                  className="bg-white"
+                  required
+                />
+              </div>
 
-                  {/* Fecha Reingreso */}
-                  <div className="space-y-1.5">
-                    <Label className="text-gray-300 text-sm">Fecha de Reingreso *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal bg-white",
-                            !fechaReingreso && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fechaReingreso ? format(fechaReingreso, "PPP", { locale: es }) : "Seleccionar"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={fechaReingreso}
-                          onSelect={setFechaReingreso}
-                          locale={es}
-                          disabled={(date) => fechaFin ? date <= fechaFin : false}
-                          initialFocus
-                          weekStartsOn={1}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sede" className="text-gray-300 text-sm">
+                  Sede *
+                </Label>
+                <Input
+                  id="sede"
+                  name="sede"
+                  value={formData.sede}
+                  onChange={handleInputChange}
+                  placeholder="Ej: Medellín"
+                  className="bg-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="jefe_inmediato" className="text-gray-300 text-sm">
+                  Jefe Inmediato *
+                </Label>
+                <Input
+                  id="jefe_inmediato"
+                  name="jefe_inmediato"
+                  value={formData.jefe_inmediato}
+                  onChange={handleInputChange}
+                  placeholder="Ej: María González"
+                  className="bg-white"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Fechas */}
+            <div className="space-y-3 pt-3 border-t border-gray-700">
+              <h3 className="text-base font-semibold text-white">Período de Vacaciones</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Fecha Inicio */}
+                <div className="space-y-1.5">
+                  <Label className="text-gray-300 text-sm">Fecha de Inicio *</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal bg-white",
+                          !fechaInicio && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {fechaInicio ? format(fechaInicio, "PPP", { locale: es }) : "Seleccionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={fechaInicio}
+                        onSelect={setFechaInicio}
+                        locale={es}
+                        initialFocus
+                        weekStartsOn={1}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Fecha Fin */}
+                <div className="space-y-1.5">
+                  <Label className="text-gray-300 text-sm">Fecha de Finalización *</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal bg-white",
+                          !fechaFin && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {fechaFin ? format(fechaFin, "PPP", { locale: es }) : "Seleccionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={fechaFin}
+                        onSelect={setFechaFin}
+                        locale={es}
+                        disabled={(date) => fechaInicio ? date < fechaInicio : false}
+                        initialFocus
+                        weekStartsOn={1}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Fecha Reingreso */}
+                <div className="space-y-1.5">
+                  <Label className="text-gray-300 text-sm">Fecha de Reingreso *</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal bg-white",
+                          !fechaReingreso && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {fechaReingreso ? format(fechaReingreso, "PPP", { locale: es }) : "Seleccionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={fechaReingreso}
+                        onSelect={setFechaReingreso}
+                        locale={es}
+                        disabled={(date) => fechaFin ? date <= fechaFin : false}
+                        initialFocus
+                        weekStartsOn={1}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
+            </div>
 
-              {/* Botones */}
-              <div className="flex gap-4 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate("/solicitudes")}
-                  className="flex-1 h-10"
-                  disabled={isLoading}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  className="flex-1 h-10"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <span className="flex items-center gap-2">
-                      <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      Enviando...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <Send className="h-4 w-4" />
-                      Enviar Solicitud
-                    </span>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+            {/* Botones */}
+            <div className="flex gap-4 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate("/solicitudes")}
+                className="flex-1 h-10"
+                disabled={isLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1 h-10"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Enviando...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Send className="h-4 w-4" />
+                    Enviar Solicitud
+                  </span>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

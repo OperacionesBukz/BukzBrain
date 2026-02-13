@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import emailjs from '@emailjs/browser';
+import { sendEmail } from "@/services/emailService";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +39,7 @@ const SolicitudCumpleanos = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validaciones
     if (!formData.solicitante || !formData.cargo || !formData.sede || !formData.documento || !formData.jefe_inmediato) {
       toast({
@@ -62,23 +62,25 @@ const SolicitudCumpleanos = () => {
     setIsLoading(true);
 
     try {
-      // Preparar datos para EmailJS
-      const templateParams = {
-        solicitante: formData.solicitante,
-        cargo: formData.cargo,
-        sede: formData.sede,
-        documento: formData.documento,
-        fecha: format(fecha, "dd/MM/yyyy", { locale: es }),
-        jefe_inmediato: formData.jefe_inmediato
-      };
+      // Construir HTML del correo
+      const htmlContent = `
+        <h2>Solicitud de Día de Cumpleaños</h2>
+        <table style="border-collapse: collapse; width: 100%;">
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Solicitante</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.solicitante}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Documento</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.documento}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Cargo</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.cargo}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Sede</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.sede}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Fecha Cumpleaños</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${format(fecha, "dd/MM/yyyy", { locale: es })}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Jefe Inmediato</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${formData.jefe_inmediato}</td></tr>
+        </table>
+      `;
 
-      // Enviar correo con EmailJS
-      await emailjs.send(
-        import.meta.env.VITE_EMAILJS_SERVICE_ID,
-        import.meta.env.VITE_EMAILJS_TEMPLATE_CUMPLEANOS,
-        templateParams,
-        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
-      );
+      // Enviar correo con Brevo via Supabase Edge Function
+      await sendEmail({
+        to: "operaciones@bukz.co",
+        subject: `Solicitud Día de Cumpleaños - ${formData.solicitante}`,
+        htmlContent,
+      });
 
       toast({
         title: "¡Solicitud enviada!",
@@ -134,163 +136,163 @@ const SolicitudCumpleanos = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Datos Personales */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="solicitante" className="text-gray-300">
-                    Nombre Completo *
-                  </Label>
-                  <Input
-                    id="solicitante"
-                    name="solicitante"
-                    value={formData.solicitante}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Juan Pérez"
-                    className="bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="documento" className="text-gray-300">
-                    Documento de Identidad *
-                  </Label>
-                  <Input
-                    id="documento"
-                    name="documento"
-                    value={formData.documento}
-                    onChange={handleInputChange}
-                    placeholder="Ej: 1234567890"
-                    className="bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="cargo" className="text-gray-300">
-                    Cargo *
-                  </Label>
-                  <Input
-                    id="cargo"
-                    name="cargo"
-                    value={formData.cargo}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Analista/Librero"
-                    className="bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="sede bukz" className="text-gray-300">
-                    Sede *
-                  </Label>
-                  <Input
-                    id="sede"
-                    name="sede"
-                    value={formData.sede}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Medellín"
-                    className="bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="jefe_inmediato" className="text-gray-300">
-                    Jefe Inmediato *
-                  </Label>
-                  <Input
-                    id="jefe_inmediato"
-                    name="jefe_inmediato"
-                    value={formData.jefe_inmediato}
-                    onChange={handleInputChange}
-                    placeholder="Ej: María González"
-                    className="bg-white"
-                    required
-                  />
-                </div>
+            {/* Datos Personales */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="solicitante" className="text-gray-300">
+                  Nombre Completo *
+                </Label>
+                <Input
+                  id="solicitante"
+                  name="solicitante"
+                  value={formData.solicitante}
+                  onChange={handleInputChange}
+                  placeholder="Ej: Juan Pérez"
+                  className="bg-white"
+                  required
+                />
               </div>
 
-              {/* Fecha */}
-              <div className="space-y-4 pt-4 border-t border-gray-700">
-                <h3 className="text-base font-semibold text-white">Fecha del Día de Cumpleaños</h3>
-                
-                <div className="max-w-sm">
-                  <div className="space-y-1.5">
-                    <Label className="text-gray-300">Fecha *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal bg-white",
-                            !fecha && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {fecha ? format(fecha, "PPP", { locale: es }) : "Seleccionar fecha"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={fecha}
-                          onSelect={setFecha}
-                          locale={es}
-                          initialFocus
-                          weekStartsOn={1}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <p className="text-sm text-gray-400">
-                      Selecciona la fecha en la que deseas tomar tu día de cumpleaños
-                    </p>
-                  </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="documento" className="text-gray-300">
+                  Documento de Identidad *
+                </Label>
+                <Input
+                  id="documento"
+                  name="documento"
+                  value={formData.documento}
+                  onChange={handleInputChange}
+                  placeholder="Ej: 1234567890"
+                  className="bg-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cargo" className="text-gray-300">
+                  Cargo *
+                </Label>
+                <Input
+                  id="cargo"
+                  name="cargo"
+                  value={formData.cargo}
+                  onChange={handleInputChange}
+                  placeholder="Ej: Analista/Librero"
+                  className="bg-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="sede bukz" className="text-gray-300">
+                  Sede *
+                </Label>
+                <Input
+                  id="sede"
+                  name="sede"
+                  value={formData.sede}
+                  onChange={handleInputChange}
+                  placeholder="Ej: Medellín"
+                  className="bg-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="jefe_inmediato" className="text-gray-300">
+                  Jefe Inmediato *
+                </Label>
+                <Input
+                  id="jefe_inmediato"
+                  name="jefe_inmediato"
+                  value={formData.jefe_inmediato}
+                  onChange={handleInputChange}
+                  placeholder="Ej: María González"
+                  className="bg-white"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Fecha */}
+            <div className="space-y-4 pt-4 border-t border-gray-700">
+              <h3 className="text-base font-semibold text-white">Fecha del Día de Cumpleaños</h3>
+
+              <div className="max-w-sm">
+                <div className="space-y-1.5">
+                  <Label className="text-gray-300">Fecha *</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal bg-white",
+                          !fecha && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {fecha ? format(fecha, "PPP", { locale: es }) : "Seleccionar fecha"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={fecha}
+                        onSelect={setFecha}
+                        locale={es}
+                        initialFocus
+                        weekStartsOn={1}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-sm text-gray-400">
+                    Selecciona la fecha en la que deseas tomar tu día de cumpleaños
+                  </p>
                 </div>
               </div>
+            </div>
 
-              {/* Información Adicional */}
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <p className="text-sm text-blue-300">
-                  <strong>Nota:</strong> El día de cumpleaños es un beneficio otorgado por la empresa.
-                  Asegúrate de solicitarlo con la debida anticipación y contar con la aprobación de tu jefe inmediato.
-                </p>
-              </div>
+            {/* Información Adicional */}
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+              <p className="text-sm text-blue-300">
+                <strong>Nota:</strong> El día de cumpleaños es un beneficio otorgado por la empresa.
+                Asegúrate de solicitarlo con la debida anticipación y contar con la aprobación de tu jefe inmediato.
+              </p>
+            </div>
 
-              {/* Botones */}
-              <div className="flex gap-4 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate("/solicitudes")}
-                  className="flex-1"
-                  disabled={isLoading}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  className="flex-1"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <span className="flex items-center gap-2">
-                      <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      Enviando...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <Send className="h-4 w-4" />
-                      Enviar Solicitud
-                    </span>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+            {/* Botones */}
+            <div className="flex gap-4 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate("/solicitudes")}
+                className="flex-1"
+                disabled={isLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Enviando...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Send className="h-4 w-4" />
+                    Enviar Solicitud
+                  </span>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 
